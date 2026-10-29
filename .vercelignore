@@ -1,0 +1,6 @@
+/contracts/
+/scratch/
+/docs/
+/tests/
+.env*
+*.env
