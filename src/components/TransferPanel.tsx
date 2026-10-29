@@ -152,6 +152,40 @@ export const TransferPanel: React.FC<Props> = ({
     }
   };
 
+  const handleClaimFaucet = async () => {
+    if (!isEvmConnected || !evmWalletState.address || !isCorrectNetwork) {
+      setErrorMsg('Connect EVM wallet on Portaldot V3 to claim testnet pUSDC.');
+      return;
+    }
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsSubmitting(true);
+    setStatusMsg('Prompting wallet for 10,000 pUSDC faucet claim...');
+
+    try {
+      const callData = encodeCall(SELECTORS.faucetMint, [
+        { t: 'address', v: evmWalletState.address },
+        { t: 'uint', v: 10000_000000n }
+      ]);
+      const res = await globalTxService.executeEvmTx('faucetClaim', {
+        label: 'Claim 10,000 pUSDC Faucet',
+        to: LIVE_DEPLOYMENT.pusdcAddress,
+        data: callData,
+        value: 0n,
+        valueHex: '0x0'
+      }, evmWallet);
+
+      setTxHash(res.txHash || null);
+      setSuccessMsg('Successfully claimed 10,000 pUSDC test tokens!');
+      onRefreshBalances();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Faucet claim failed.');
+    } finally {
+      setIsSubmitting(false);
+      setStatusMsg(null);
+    }
+  };
+
   return (
     <div className="glass-panel rounded-2xl p-6 space-y-5">
       {/* Mode Selector */}
@@ -216,6 +250,25 @@ export const TransferPanel: React.FC<Props> = ({
           <RefreshIcon className="w-3 h-3" /> Refresh
         </button>
       </div>
+
+      {/* Testnet Faucet Banner for pUSDC */}
+      {mode === 'evm_pusdc' && (
+        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-cyan-200">Need Testnet Stablecoins?</p>
+            <p className="text-[11px] text-slate-400">Claim 10,000 pUSDC simulation tokens directly from the verified contract faucet.</p>
+          </div>
+          <button
+            type="button"
+            id="btn-claim-faucet"
+            disabled={isSubmitting || !isEvmConnected || !isCorrectNetwork}
+            onClick={handleClaimFaucet}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold mono bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            Claim 10,000 pUSDC
+          </button>
+        </div>
+      )}
 
       {/* Recipient Input */}
       <div className="space-y-1.5">
