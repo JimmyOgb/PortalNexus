@@ -1,0 +1,13 @@
+# Environment & Secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+coverage/
+coverage.json
+node_modules/

@@ -1,0 +1,35 @@
+{
+  "network": "Portaldot V3 Testnet",
+  "chainId": 420420777,
+  "architecture": "Architecture A — Direct Native POT / pUSDC AMM",
+  "timestamp": "2026-10-29T10:55:00.000Z",
+  "deployer": "0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A",
+  "initialBalance": "420.900000000000000000 POT",
+  "finalBalance": "13.088472552168753000 POT",
+  "totalCost": "407.811527447831247000 POT",
+  "contracts": {
+    "testUSDC": {
+      "name": "Portal Test USD",
+      "symbol": "pUSDC",
+      "decimals": 6,
+      "address": "0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002",
+      "txHash": "0x4534608666225d9fba0f8c69a28dd29c4130825b06a5160c33e6beec1b225152",
+      "blockNumber": 237279,
+      "gasUsed": "4664872854966639",
+      "bytecodeSize": 1482,
+      "verifiedOnChain": true
+    },
+    "nexusAMM": {
+      "name": "NexusAMMNative",
+      "pair": "Native POT / pUSDC",
+      "address": "0x407A2609dfd5336a38D6274B1EFc1804930f160A",
+      "txHash": "0x48cd085966cc570984aa4883d05ed3c26de9ade7d4296f909cc47f6ae0e9ba54",
+      "blockNumber": 237284,
+      "gasUsed": "10097535378439017",
+      "bytecodeSize": 3305,
+      "usdc": "0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002",
+      "receiptContract": "0x407A2609dfd5336a38D6274B1EFc1804930f160A",
+      "verifiedOnChain": true
+    }
+  }
+}
