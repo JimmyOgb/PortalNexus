@@ -30,6 +30,8 @@ export interface SubstrateWalletState {
 
 export class SubstrateWalletService {
   private substrateRpc: SubstrateRpcClient | null = null;
+  private injectedInstance: any = null;
+  private signer: any = null;
   private state: SubstrateWalletState = {
     isConnected: false,
     selectedAccount: null,
@@ -119,6 +121,8 @@ export class SubstrateWalletService {
 
     try {
       const injectedInstance = await provider.enable('PortalNexus');
+      this.injectedInstance = injectedInstance;
+      this.signer = injectedInstance.signer || null;
       const accountsList = await injectedInstance.accounts.get();
 
       if (!accountsList || accountsList.length === 0) {
@@ -178,7 +182,39 @@ export class SubstrateWalletService {
     }
   }
 
+  public getSigner(): any {
+    return this.signer;
+  }
+
+  public getInjectedInstance(): any {
+    return this.injectedInstance;
+  }
+
+  /**
+   * Prompts connected Substrate wallet to sign a raw payload or message.
+   */
+  public async signRaw(data: string): Promise<string> {
+    if (!this.signer || !this.signer.signRaw || !this.state.selectedAccount) {
+      throw new Error('Substrate wallet signer unavailable. Connect a compatible extension first.');
+    }
+    try {
+      const res = await this.signer.signRaw({
+        address: this.state.selectedAccount.address,
+        data,
+        type: 'bytes'
+      });
+      return res.signature;
+    } catch (err: any) {
+      if (err?.message?.toLowerCase().includes('reject') || err?.message?.toLowerCase().includes('denied') || err?.code === 4001) {
+        throw new Error('Signature request rejected by user in Substrate wallet.');
+      }
+      throw new Error(err?.message || 'Failed to sign payload with Substrate wallet.');
+    }
+  }
+
   public disconnect(): void {
+    this.injectedInstance = null;
+    this.signer = null;
     this.updateState({
       isConnected: false,
       selectedAccount: null,

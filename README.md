@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](./LICENSE)
 [![Portaldot V3 Testnet](https://img.shields.io/badge/Network-Portaldot_V3_Testnet_(420420777)-cyan.svg)](https://node-console.portaldot.dev/)
-[![Automated Tests](https://img.shields.io/badge/Tests-114_Passing_(46_Hardhat_+_68_Vitest)-purple.svg)](./docs/TESTING_AND_EVIDENCE.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-126_Passing_(46_Hardhat_+_80_Vitest)-purple.svg)](./PORTALNEXUS_WALLET_IMPLEMENTATION_REPORT.md)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-portalnexus--two.vercel.app-blue.svg)](https://portalnexus-two.vercel.app)
 
 ---
@@ -15,24 +15,27 @@
 | Parameter | Value |
 | :--- | :--- |
 | **Live Vercel Production URL** | [https://portalnexus-two.vercel.app](https://portalnexus-two.vercel.app) |
-| **Direct Deployment URL** | [https://portalnexus-gt0fff2cd-jamism123.vercel.app](https://portalnexus-gt0fff2cd-jamism123.vercel.app) |
 | **Vercel Project Name** | `portalnexus` (jamism123) |
 | **GitHub Continuous Deployment** | Connected to [`JimmyOgb/PortalNexus`](https://github.com/JimmyOgb/PortalNexus) on branch `main` |
 | **Target Network** | **Portaldot V3 Testnet** (`Chain ID 420420777`) |
+| **Execution Mode** | **Interactive dApp Mode** (User-Signed Web3 Wallet Transactions) |
 
-### What the Hosted Demo Currently Supports
-- **Live Dual-VM Observability:** Live streaming telemetry from Portaldot Substrate WebSocket (`wss://test-node-v3.portaldot.dev`) and EVM JSON-RPC (`https://test-evm-rpc-v3.portaldot.dev`), displaying real-time block cadence offsets ($\Delta = \text{Substrate} - \text{EVM}$).
-- **`pallet-revive` Deterministic Address Inspector:** Real-time derivation of Substrate `SS58` addresses from EVM `0x...` (H160) keys via the `0xEE`-padding rule (`H160 || [0xEE; 12]`), guarding against legacy Frontier hash divergence.
-- **On-Chain Testnet AMM State Inspection:** Direct read-only RPC calls (`eth_call`, `eth_chainId`, `eth_getBlockByNumber`, etc.) to deployed contracts (`NexusAMMNative` at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` and `TestUSDCMin` at `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002`).
-- **Interactive Calldata Preview:** Generates exact ABI-encoded payloads, slippage tolerances, and invariant checks for faucet minting, token approvals, liquidity provisioning, and constant-product swaps.
-- **Fail-Closed Multi-State Wallet Guard:** Clean handling for disconnected, wrong-network (e.g. Ethereum mainnet), user-rejected, and connected wallet states.
+### What the Hosted dApp Supports
+- **Live Dual-VM Observability:** Streaming telemetry from Portaldot Substrate WebSocket (`wss://test-node-v3.portaldot.dev`) and EVM JSON-RPC (`https://test-evm-rpc-v3.portaldot.dev`), displaying real-time block cadence offsets ($\Delta = \text{Substrate} - \text{EVM}$).
+- **Real Wallet Connectivity:** Dual-VM wallet support for EVM providers (MetaMask, Rabby) on Chain ID `420420777` and Substrate extensions (Polkadot{.js}, Talisman, SubWallet) on SS58 Prefix 42.
+- **Transfers & Faucet Panel (Tab 2):** Real-time testnet faucet claims (`10,000 pUSDC` per call), ERC-20 pUSDC token transfers, and native POT transfers on EVM and Substrate.
+- **Nexus AMM Panel (Tab 3):** User-signed constant-product liquidity additions, LP receipt NFT redemption, and token swaps with automatic empty-pool swap protection.
+- **In-dApp Contract Deployment Manager:** Direct browser-signed deployment modal supporting Architecture A (`TestUSDCMin`, `NexusAMMNative`) and Architecture B (`WPotToken`, `TestUSDC`, `NexusAMM`).
+- **`pallet-revive` Deterministic Address Inspector (Tab 1):** Real-time derivation of Substrate `SS58` addresses from EVM `0x...` (H160) keys via the `0xEE`-padding rule (`H160 || [0xEE; 12]`), complete with authoritative test vectors and explicit ownership boundary warnings.
+- **Floating Transaction Notification Toast:** Real-time lifecycle tracking (`PROMPTING_WALLET` -> `SUBMITTING` -> `MINING` -> `CONFIRMED`) with direct links to the Portaldot node console explorer.
 
 ### Critical Safety & Testnet Disclosures
 > [!IMPORTANT]
-> 1. **Testnet Only — Not Mainnet:** Deployment of this frontend to Vercel does **NOT** mean smart contracts are deployed to mainnet. All smart contracts operate strictly on the experimental **Portaldot V3 Testnet** (`Chain ID 420420777`).
-> 2. **Zero-Liquidity AMM Pool:** The hosted AMM pool currently has **zero reserves (`0 POT / 0 pUSDC`)**. Live token swaps cannot execute on-chain until the pool is seeded with liquidity.
-> 3. **Simulation Token (`pUSDC`):** `pUSDC` is a testnet simulation token with **zero real-world monetary value and no asset backing**.
-> 4. **Transaction Broadcasting Disabled (`TX_SUBMISSION_ENABLED = false`):** Frontend transaction broadcasting is permanently disabled in this release to prevent unauthorized testnet state-rent and gas expenditures. The UI constructs and displays verifiable calldata for review but will not broadcast live transactions.
+> 1. **Testnet Only — Not Mainnet:** All smart contracts operate strictly on the experimental **Portaldot V3 Testnet** (`Chain ID 420420777`).
+> 2. **Simulation Token (`pUSDC`):** `pUSDC` is a testnet simulation token with **zero real-world monetary value and no asset backing**.
+> 3. **User-Signed Transactions Only:** PortalNexus never requests private keys or broadcasts unattended transactions. Every transaction triggers the user's browser wallet for explicit manual confirmation.
+> 4. **Cross-VM Bridge Limitation:** Direct cross-VM teleportation is disabled because Portaldot V3 runtime does not expose client-accessible bridge extrinsics.
+> 5. **Empty-Pool Swap Protection:** When AMM reserves are zero, token swap execution is disabled by the interface until initial liquidity is seeded.
 
 ---
 

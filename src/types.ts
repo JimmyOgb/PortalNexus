@@ -80,5 +80,9 @@ export interface ReviveDerivationResult {
   paddedAccountId32Hex: string | null;
   ss58Prefix42Address: string | null;
   legacyMoonbeamMismatchWarning: boolean;
+  isDeterministicDerivation: boolean;
+  isProofOfOwnership: boolean;
+  ownershipWarning: string;
+  crossVmTransferSupported: boolean;
   explanation: string;
 }

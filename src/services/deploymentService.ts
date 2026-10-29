@@ -662,4 +662,59 @@ export class DeploymentService {
       return { success: false, error: err?.message || 'Failed during AMM read queries' };
     }
   }
+
+  /**
+   * Generic, user-authorized contract deployment for any supported verified artifact.
+   * Prompts the user's connected wallet, polls receipt, and verifies on-chain code.
+   */
+  public async deployContractArtifact(artifact: {
+    name: string;
+    bytecode: string;
+    constructorArgsHex?: string;
+  }): Promise<{
+    success: boolean;
+    txHash?: string;
+    contractAddress?: string;
+    blockNumber?: number;
+    error?: string;
+  }> {
+    const walletState = this.evmWallet.getState();
+    if (!walletState.isConnected || !walletState.address) {
+      return { success: false, error: 'Wallet not connected. Connect an EVM wallet first.' };
+    }
+    if (!walletState.isCorrectNetwork) {
+      return { success: false, error: `Wrong network. Please switch to Portaldot V3 Testnet (${PORTALDOT_CHAIN_ID_DEC}).` };
+    }
+
+    const fullData = artifact.bytecode + (artifact.constructorArgsHex ? artifact.constructorArgsHex.replace(/^0x/, '') : '');
+
+    try {
+      const txHash = await this.evmWallet.sendTransaction({ data: fullData });
+      const receipt = await this.pollReceipt(txHash);
+
+      if (!receipt || (receipt.status !== '0x1' && receipt.status !== '1')) {
+        return { success: false, txHash, error: 'Deployment transaction reverted on-chain.' };
+      }
+
+      const contractAddress = receipt.contractAddress;
+      if (!contractAddress) {
+        return { success: false, txHash, error: 'No contract address returned in transaction receipt.' };
+      }
+
+      // Verify on-chain bytecode
+      const codeRes = await this.evmRpc.query('eth_getCode', [contractAddress, 'latest']);
+      if (!codeRes?.result || codeRes.result === '0x' || codeRes.result === '0x0') {
+        return { success: false, txHash, contractAddress, error: 'Deployed address has empty bytecode on-chain.' };
+      }
+
+      return {
+        success: true,
+        txHash,
+        contractAddress,
+        blockNumber: parseInt(receipt.blockNumber, 16)
+      };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Deployment transaction failed.' };
+    }
+  }
 }

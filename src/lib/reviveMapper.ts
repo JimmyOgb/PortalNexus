@@ -154,6 +154,10 @@ export function deriveReviveAccountId(evmAddress: string): ReviveDerivationResul
       paddedAccountId32Hex: null,
       ss58Prefix42Address: null,
       legacyMoonbeamMismatchWarning: false,
+      isDeterministicDerivation: false,
+      isProofOfOwnership: false,
+      ownershipWarning: 'Invalid EVM address.',
+      crossVmTransferSupported: false,
       explanation: 'Invalid EVM address format. Must be a 20-byte hexadecimal string (40 hex characters).'
     };
   }
@@ -181,6 +185,49 @@ export function deriveReviveAccountId(evmAddress: string): ReviveDerivationResul
     paddedAccountId32Hex: paddedHex,
     ss58Prefix42Address: ss58Address,
     legacyMoonbeamMismatchWarning: true,
-    explanation: 'Derived via pallet-revive AccountId32Mapper (20-byte H160 + 12x 0xEE padding). Do NOT use legacy evmToAddress().'
+    isDeterministicDerivation: true,
+    isProofOfOwnership: false,
+    ownershipWarning: 'Deterministic conversion only. Does NOT establish account ownership, key linkage, or transfer rights.',
+    crossVmTransferSupported: false,
+    explanation: 'Derived via pallet-revive AccountId32Mapper (20-byte H160 + 12x 0xEE padding). Do NOT use legacy evmToAddress(). Mapping does not enable native cross-VM transfers without runtime bridge extrinsics.'
   };
 }
+
+export interface ReviveTestVector {
+  name: string;
+  evm: string;
+  paddedHex: string;
+  ss58: string;
+  description: string;
+}
+
+export const REVIVE_MAPPING_TEST_VECTORS: ReviveTestVector[] = [
+  {
+    name: 'Reference Vector (0x1111…1111)',
+    evm: '0x1111111111111111111111111111111111111111',
+    paddedHex: '0x1111111111111111111111111111111111111111eeeeeeeeeeeeeeeeeeeeeeee',
+    ss58: '5CT5jwBEAhveEjgiSCQbkaKcKcUyGT47FQKa1yyuvLR62v8j',
+    description: 'Uniform nibble test vector demonstrating 0xEE padding'
+  },
+  {
+    name: 'Genesis Endowment (0x0000…0000)',
+    evm: '0x0000000000000000000000000000000000000000',
+    paddedHex: '0x0000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeee',
+    ss58: '5C4hrfjw9DjXZTzV3MwzrrAr9P1MLDHajjSidz9bR544LEq1',
+    description: 'Zero-byte edge case verifying leading zeros and checksum'
+  },
+  {
+    name: 'Verified On-Chain Deployer',
+    evm: '0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A',
+    paddedHex: '0xdc7f5c7813a5f0e3f51c2fe569de6c5577768a2aeeeeeeeeeeeeeeeeeeeeeeee',
+    ss58: '5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu',
+    description: 'Actual deployer address for Architecture A contracts on Portaldot V3'
+  },
+  {
+    name: 'Substrate Standard Alith EVM Test Address',
+    evm: '0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac',
+    paddedHex: '0xf24ff3a9cf04c71dbc94d0b566f7a27b94566caceeeeeeeeeeeeeeeeeeeeeeee',
+    ss58: '5HYRCKHYJN9z5xUtfFkyMj4JUhsAwWyvuU8vKB1FcnYTf9ZQ',
+    description: 'Standard Polkadot EVM dev account mapped to Revive fallback'
+  }
+];

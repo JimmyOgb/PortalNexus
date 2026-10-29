@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { EvmRpcClient } from '../services/evmRpc';
-import { EvmWalletState } from '../services/evmWallet';
+import { EvmWalletService, EvmWalletState, PORTALDOT_EXPLORER_URL } from '../services/evmWallet';
 import { formatTokenAmount } from '../services/contractMath';
 import { LIVE_DEPLOYMENT, NETWORK_CONFIG } from '../contracts/config';
+import { globalTxService } from '../services/transactionService';
+import { FeatureFlagsConfig } from '../services/featureFlags';
+import { ExternalLinkIcon, RefreshIcon, CheckIcon, AlertIcon } from './Icons';
 import {
-  TX_SUBMISSION_ENABLED,
   PoolReserves,
   LpPosition,
   PreparedTx,
@@ -33,6 +35,7 @@ import {
 interface Props {
   evmClient: EvmRpcClient;
   wallet: EvmWalletState;
+  evmWallet?: EvmWalletService;
 }
 
 type Mode = 'swap' | 'add' | 'remove' | 'faucet';
@@ -51,7 +54,7 @@ interface LiveData {
 const fmtPot = (v: bigint) => formatTokenAmount(v, 18, 6);
 const fmtUsdc = (v: bigint) => formatTokenAmount(v, 6, 2);
 
-export const AmmPanel: React.FC<Props> = ({ evmClient, wallet }) => {
+export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
   const [mode, setMode] = useState<Mode>('swap');
   const [data, setData] = useState<LiveData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,12 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet }) => {
   const [selectedToken, setSelectedToken] = useState<string>('');
   const [slippageBps, setSlippageBps] = useState(50);
   const [deadlineMin, setDeadlineMin] = useState(20);
+
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [execStatus, setExecStatus] = useState<string | null>(null);
+  const [execTxHash, setExecTxHash] = useState<string | null>(null);
+  const [execError, setExecError] = useState<string | null>(null);
+  const [execSuccess, setExecSuccess] = useState<string | null>(null);
 
   const rpc = useCallback(async (method: string, params: any[]) => (await evmClient.query(method, params)).result, [evmClient]);
 
@@ -270,6 +279,60 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet }) => {
     ? `Unsupported network (chain ${wallet.chainId}). Switch to Portaldot V3 Testnet (${NETWORK_CONFIG.chainIdDec}).`
     : null;
 
+  const handleExecute = async () => {
+    if (!evmWallet || !review.txs || review.txs.length === 0 || !wallet.address || !wallet.isCorrectNetwork) return;
+    setIsExecuting(true);
+    setExecError(null);
+    setExecSuccess(null);
+    setExecTxHash(null);
+
+    try {
+      for (let i = 0; i < review.txs.length; i++) {
+        const tx = review.txs[i];
+        setExecStatus(`Step ${i + 1} of ${review.txs.length}: Authorizing "${tx.label}" in wallet...`);
+
+        const featureId: keyof FeatureFlagsConfig =
+          mode === 'faucet' ? 'faucetClaim' :
+          mode === 'add' ? (tx.label.toLowerCase().includes('approve') ? 'tokenApprove' : 'ammAddLiquidity') :
+          mode === 'remove' ? 'ammRemoveLiquidity' :
+          (tx.label.toLowerCase().includes('approve') ? 'tokenApprove' : 'ammSwap');
+
+        const res = await globalTxService.executeEvmTx(featureId, tx, evmWallet, { hasLiquidity: !empty });
+        setExecTxHash(res.txHash || null);
+      }
+      setExecSuccess('Transaction confirmed on Portaldot V3 Testnet!');
+      setRefreshTick(t => t + 1);
+    } catch (err: any) {
+      setExecError(err?.message || 'Transaction execution failed.');
+    } finally {
+      setIsExecuting(false);
+      setExecStatus(null);
+    }
+  };
+
+  const isButtonDisabled =
+    !connected ||
+    wrongNetwork ||
+    isExecuting ||
+    !!review.error ||
+    !review.txs ||
+    review.txs.length === 0 ||
+    (mode === 'swap' && empty);
+
+  const getButtonText = () => {
+    if (isExecuting) return 'Processing in Wallet…';
+    if (!connected) return 'Wallet Disconnected — Connect EVM Wallet to Submit';
+    if (wrongNetwork) return `Unsupported Network — Switch to Portaldot V3 (${NETWORK_CONFIG.chainIdDec})`;
+    if (mode === 'swap' && empty) return 'Pool Has 0 Reserves — Add Liquidity First';
+    if (review.error) return review.error;
+    if (!review.txs || review.txs.length === 0) return 'Enter Amount to Prepare Transaction';
+
+    if (mode === 'faucet') return `Claim ${review.txs[0]?.label || 'pUSDC'}`;
+    if (mode === 'add') return review.txs.length > 1 ? 'Approve pUSDC & Add Liquidity' : 'Confirm & Add Liquidity';
+    if (mode === 'remove') return 'Confirm & Remove Liquidity';
+    return review.txs.length > 1 ? 'Approve pUSDC & Swap' : 'Confirm & Execute Swap';
+  };
+
   const handlePreviewInitialDeposit = () => {
     setMode('add');
     setAddPot('0.5');
@@ -412,31 +475,79 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet }) => {
       )}
 
       {review.error && <p id="review-error" className="text-xs mono text-rose-400">{review.error}</p>}
-      {review.warnings?.map((w) => (
-        <p key={w} className="text-xs mono text-amber-300">{w}</p>
-      ))}
+
+      {/* State Feedback Cards */}
+      {execStatus && (
+        <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs mono text-cyan-300 flex items-center gap-2">
+          <RefreshIcon className="w-4 h-4 animate-spin" />
+          <span>{execStatus}</span>
+        </div>
+      )}
+
+      {execError && (
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs mono text-rose-300 flex items-center gap-2">
+          <AlertIcon className="w-4 h-4 shrink-0" />
+          <span>{execError}</span>
+        </div>
+      )}
+
+      {execSuccess && (
+        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs mono text-emerald-300 space-y-1">
+          <div className="flex items-center gap-2">
+            <CheckIcon className="w-4 h-4 shrink-0 text-emerald-400" />
+            <span className="font-semibold">{execSuccess}</span>
+          </div>
+          {execTxHash && (
+            <div className="pt-1 text-[11px] text-slate-300 flex items-center gap-2">
+              <span>Tx Hash: <code className="text-white">{execTxHash.slice(0, 10)}…{execTxHash.slice(-8)}</code></span>
+              <a
+                href={`${PORTALDOT_EXPLORER_URL}/tx/${execTxHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-cyan-400 hover:underline flex items-center gap-0.5"
+              >
+                Explorer <ExternalLinkIcon className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Review Lines */}
       {review.lines && !review.error && (
         <div id="review" className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs mono space-y-1.5">
-          <p className="text-slate-300 font-semibold">Confirmation details (estimates; not yet submitted)</p>
+          <p className="text-slate-300 font-semibold">Transaction Review &amp; Gas Estimates</p>
           {review.lines.map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-3"><span className="text-slate-400">{k}</span><span className="text-white text-right break-all">{v}</span></div>
+            <div key={k} className="flex justify-between gap-3">
+              <span className="text-slate-400">{k}</span>
+              <span className="text-white text-right break-all">{v}</span>
+            </div>
           ))}
           {review.txs?.map((t, i) => (
             <div key={i} className="pt-2 border-t border-slate-800 text-[10px] text-slate-400 break-all">
-              Tx {i + 1}: {t.label} → {t.to} · value {t.valueHex} · data {t.data.slice(0, 10)}…
+              Tx {i + 1}: {t.label} → {t.to} · value {t.valueHex}
             </div>
           ))}
         </div>
       )}
 
+      {/* Interactive Action Button */}
       <button
-        disabled={!TX_SUBMISSION_ENABLED}
+        disabled={isButtonDisabled}
         id="submit-guarded"
-        className="w-full py-3 rounded-2xl font-bold text-xs mono bg-slate-800 text-slate-400 cursor-not-allowed border border-white/10"
+        onClick={handleExecute}
+        className={`w-full py-3.5 rounded-2xl font-bold text-xs mono uppercase tracking-wider transition ${
+          isButtonDisabled
+            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/10'
+            : 'bg-gradient-to-r from-emerald-500 via-cyan-500 to-purple-600 text-black hover:opacity-95 shadow-lg shadow-cyan-500/20 cursor-pointer'
+        }`}
       >
-        Transaction submission disabled in this build — preparation only
+        {getButtonText()}
       </button>
-      <p className="text-[10px] text-slate-500">A connected wallet is not a confirmed transaction. Nothing is sent from this screen.</p>
+
+      <p className="text-[10px] text-slate-500 text-center mono">
+        Zero silent signing &bull; Every transaction prompts your browser wallet's native approval screen.
+      </p>
     </div>
   );
 };

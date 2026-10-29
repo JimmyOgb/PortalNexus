@@ -8,6 +8,7 @@
 
 export const SELECTORS = {
   // TestUSDCMin
+  transfer: '0xa9059cbb', // transfer(address,uint256)
   faucetMint: '0xa5c51274', // faucetMint(address,uint256)
   approve: '0x095ea7b3', // approve(address,uint256)
   allowance: '0xdd62ed3e', // allowance(address,address)

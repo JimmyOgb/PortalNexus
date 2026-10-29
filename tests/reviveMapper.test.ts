@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveReviveAccountId, encodeSS58Prefix42 } from '../src/lib/reviveMapper';
+import { deriveReviveAccountId, encodeSS58Prefix42, REVIVE_MAPPING_TEST_VECTORS } from '../src/lib/reviveMapper';
 
 describe('pallet-revive AccountId32Mapper & SS58 Derivation', () => {
   it('correctly pads 20-byte H160 with 12x 0xEE bytes for Revive AccountId32', () => {
@@ -36,6 +36,20 @@ describe('pallet-revive AccountId32Mapper & SS58 Derivation', () => {
     expect(result.isValidEvmAddress).toBe(true);
     expect(result.paddedAccountId32Hex).toBe('0x0000000000000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeee');
     expect(result.ss58Prefix42Address).toBe('5C4hrfjw9DjXZTzV3MwzrrAr9P1MLDHajjSidz9bR544LEq1');
+  });
+
+  it('verifies all authoritative REVIVE_MAPPING_TEST_VECTORS', () => {
+    expect(REVIVE_MAPPING_TEST_VECTORS.length).toBeGreaterThanOrEqual(4);
+    for (const vector of REVIVE_MAPPING_TEST_VECTORS) {
+      const result = deriveReviveAccountId(vector.evm);
+      expect(result.isValidEvmAddress).toBe(true);
+      expect(result.paddedAccountId32Hex?.toLowerCase()).toBe(vector.paddedHex.toLowerCase());
+      expect(result.ss58Prefix42Address).toBe(vector.ss58);
+      expect(result.isDeterministicDerivation).toBe(true);
+      expect(result.isProofOfOwnership).toBe(false);
+      expect(result.crossVmTransferSupported).toBe(false);
+      expect(result.ownershipWarning).toContain('Does NOT establish account ownership');
+    }
   });
 
   it('rejects invalid or malformed EVM addresses gracefully', () => {

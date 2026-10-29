@@ -216,6 +216,88 @@ export class EvmWalletService {
     }
   }
 
+  public getProvider(): EthereumProvider | null {
+    return this.provider;
+  }
+
+  /**
+   * Prompts user wallet to sign and broadcast an EVM transaction.
+   * Strictly enforces chain ID 420420777 before prompting.
+   */
+  public async sendTransaction(params: {
+    to?: string;
+    data?: string;
+    value?: string;
+    gas?: string;
+  }): Promise<string> {
+    if (!this.provider || !this.state.address) {
+      throw new Error('EVM wallet not connected. Connect your wallet first.');
+    }
+    if (!this.state.isCorrectNetwork) {
+      throw new Error(`Wrong network. Please switch to Portaldot V3 Testnet (${PORTALDOT_CHAIN_ID_DEC}) first.`);
+    }
+
+    const txPayload: any = {
+      from: this.state.address,
+    };
+    if (params.to) txPayload.to = params.to;
+    if (params.data) txPayload.data = params.data;
+    if (params.value) txPayload.value = params.value;
+    if (params.gas) txPayload.gas = params.gas;
+
+    try {
+      const txHash: string = await this.provider.request({
+        method: 'eth_sendTransaction',
+        params: [txPayload]
+      });
+      if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
+        throw new Error('Wallet did not return a valid transaction hash.');
+      }
+      return txHash;
+    } catch (err: any) {
+      if (err?.code === 4001 || err?.message?.toLowerCase().includes('reject') || err?.message?.toLowerCase().includes('denied')) {
+        throw new Error('Transaction was rejected by user in wallet.');
+      }
+      throw new Error(err?.message || 'Transaction submission failed.');
+    }
+  }
+
+  /**
+   * Polls for transaction receipt on the Portaldot V3 network.
+   */
+  public async waitForReceipt(txHash: string, timeoutMs: number = 60000): Promise<{
+    status: string;
+    blockNumber: string;
+    gasUsed: string;
+    contractAddress?: string | null;
+    transactionHash: string;
+  }> {
+    if (!this.provider) throw new Error('No provider available to poll receipt.');
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const receipt = await this.provider.request({
+          method: 'eth_getTransactionReceipt',
+          params: [txHash]
+        });
+        if (receipt) {
+          return {
+            status: receipt.status,
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+            contractAddress: receipt.contractAddress ?? null,
+            transactionHash: receipt.transactionHash || txHash
+          };
+        }
+      } catch {
+        // Ignore polling error, retry
+      }
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    throw new Error(`Transaction receipt polling timed out after ${timeoutMs / 1000}s for hash: ${txHash}`);
+  }
+
   public disconnect(): void {
     this.updateState({
       isConnected: false,

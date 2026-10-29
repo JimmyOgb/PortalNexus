@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy, useCallback } from 'react';
 import { SubstrateRpcClient } from '../services/substrateRpc';
 import { EvmRpcClient } from '../services/evmRpc';
 import { BlockMonitor } from '../services/blockMonitor';
-import { deriveReviveAccountId } from '../lib/reviveMapper';
+import { deriveReviveAccountId, REVIVE_MAPPING_TEST_VECTORS } from '../lib/reviveMapper';
 import { SubstrateChainState, EvmChainState, BlockComparisonSample } from '../types';
 import type { CameraMode } from './ThreeCanvas';
-import { EvmWalletService, EvmWalletState } from '../services/evmWallet';
+import { EvmWalletService, EvmWalletState, PORTALDOT_EXPLORER_URL } from '../services/evmWallet';
 import { SubstrateWalletService, SubstrateWalletState } from '../services/substrateWallet';
-import { NETWORK_CONFIG, LIVE_DEPLOYMENT } from '../contracts/config';
+import { NETWORK_CONFIG } from '../contracts/config';
 import { AmmPanel } from './AmmPanel';
-import { ServerIcon as Server } from './Icons';
+import { TransferPanel } from './TransferPanel';
+import { ServerIcon as Server, RefreshIcon, ExternalLinkIcon, CheckIcon, AlertIcon, XIcon } from './Icons';
 import { DeploymentService } from '../services/deploymentService';
 import { DeploymentModal } from './DeploymentModal';
+import { globalTxService, TrackedTransaction } from '../services/transactionService';
+import { readPusdcBalance } from '../services/ammService';
 
 const ThreeCanvas = lazy(() => import('./ThreeCanvas'));
 
@@ -20,7 +23,7 @@ interface Props {
   evmClient: EvmRpcClient;
 }
 
-type TabType = 'teleport' | 'swap';
+type TabType = 'teleport' | 'transfers' | 'swap';
 
 export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
   // RPC Telemetry States
@@ -39,6 +42,13 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
 
   // Diagnostics Drawer
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+
+  // Active Transaction Toast State
+  const [recentTx, setRecentTx] = useState<TrackedTransaction | null>(null);
+  const [dismissTx, setDismissTx] = useState<boolean>(false);
+
+  // Live pUSDC Balance State for connected EVM wallet
+  const [pusdcBalance, setPusdcBalance] = useState<bigint | null>(null);
 
   // Wallet Services
   const [evmWallet] = useState(() => new EvmWalletService());
@@ -75,10 +85,41 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
     };
   }, [evmWallet, substrateWallet]);
 
+  // Subscribe to Global Transaction Tracker
+  useEffect(() => {
+    return globalTxService.subscribe((active, hist) => {
+      if (active) {
+        setRecentTx(active);
+        setDismissTx(false);
+      } else if (hist.length > 0) {
+        setRecentTx(hist[0]);
+      }
+    });
+  }, []);
+
   // Sync Substrate Wallet with Substrate Client
   useEffect(() => {
     substrateWallet.setRpcClient(substrateClient);
   }, [substrateClient, substrateWallet]);
+
+  // Refresh pUSDC Balance when EVM address changes or on block height update
+  const refreshBalances = useCallback(async () => {
+    if (evmWalletState.isConnected && evmWalletState.address) {
+      try {
+        const bal = await readPusdcBalance(async (m, p) => (await evmClient.query(m, p)).result, evmWalletState.address);
+        setPusdcBalance(bal);
+      } catch {
+        setPusdcBalance(null);
+      }
+      await evmWallet.refreshBalance();
+    } else {
+      setPusdcBalance(null);
+    }
+  }, [evmWalletState.isConnected, evmWalletState.address, evmClient, evmWallet]);
+
+  useEffect(() => {
+    refreshBalances();
+  }, [refreshBalances, evmState.blockHeight]);
 
   // Monitor Paired Blocks
   useEffect(() => {
@@ -332,7 +373,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-500" />
 
               {/* Terminal Tabs */}
-              <div className="grid grid-cols-2 gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/10 mb-6">
+              <div className="grid grid-cols-3 gap-2 p-1.5 bg-black/50 rounded-2xl border border-white/10 mb-6">
                 <button
                   id="tab-btn-teleport"
                   onClick={() => setActiveTab('teleport')}
@@ -345,6 +386,17 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                   1. Cross-VM Map
                 </button>
                 <button
+                  id="tab-btn-transfers"
+                  onClick={() => setActiveTab('transfers')}
+                  className={`py-2.5 px-3 rounded-xl text-xs mono font-semibold transition ${
+                    activeTab === 'transfers'
+                      ? 'bg-gradient-to-r from-cyan-500/25 to-blue-500/25 text-white border border-cyan-400/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  2. Transfers &amp; Faucet
+                </button>
+                <button
                   id="tab-btn-swap"
                   onClick={() => setActiveTab('swap')}
                   className={`py-2.5 px-3 rounded-xl text-xs mono font-semibold transition ${
@@ -353,7 +405,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                       : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  2. Nexus AMM (native POT)
+                  3. Nexus AMM
                 </button>
               </div>
 
@@ -370,6 +422,16 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                     <span className="px-2.5 py-1 rounded-md text-[11px] mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
                       pallet-revive
                     </span>
+                  </div>
+
+                  {/* Ownership Boundary Disclosure Banner */}
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      ⚠️ Mapping &ne; Proof of Ownership
+                    </p>
+                    <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                      Deterministic mathematical derivation (<code className="text-amber-100">H160 || [0xEE; 12]</code>) does <strong>not</strong> prove shared key ownership or transfer authority between addresses. Direct cross-VM bridge transfers remain disabled as no public client extrinsic is provided by the Portaldot V3 runtime.
+                    </p>
                   </div>
 
                   {/* Source Substrate Box */}
@@ -401,7 +463,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                   </div>
 
                   {/* Deterministic Revive Mapping Preview */}
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/10 text-xs mono space-y-1.5">
+                  <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs mono space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400">Pallet-Revive Deterministic Fallback:</span>
                       <span className="text-emerald-300 font-semibold truncate max-w-[280px]">
@@ -411,21 +473,24 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                     <p className="text-[10px] text-slate-400 leading-tight">
                       Algorithm: <code className="text-cyan-300">H160 || [0xEE; 12]</code> padded via Polkadot SDK AccountId32Mapper.
                     </p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setCustomEvmInput(LIVE_DEPLOYMENT.deployerAddress)}
-                        className="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[10px] mono transition"
-                      >
-                        Preset: Verified Deployer ({LIVE_DEPLOYMENT.deployerAddress.slice(0, 6)}…{LIVE_DEPLOYMENT.deployerAddress.slice(-4)})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCustomEvmInput('0x1111111111111111111111111111111111111111')}
-                        className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 text-[10px] mono transition"
-                      >
-                        Preset: Reference Vector (0x1111…1111)
-                      </button>
+                    
+                    {/* Interactive Test Vectors */}
+                    <div className="pt-2 border-t border-white/5 space-y-1.5">
+                      <p className="text-[11px] text-slate-300 font-semibold">Authoritative Test Vectors:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {REVIVE_MAPPING_TEST_VECTORS.map((vec, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setCustomEvmInput(vec.evm)}
+                            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-left border border-white/5 hover:border-white/20 transition flex flex-col justify-between"
+                            title={vec.description}
+                          >
+                            <span className="text-[10px] text-white font-medium truncate">{vec.name}</span>
+                            <span className="text-[9px] text-cyan-400 mono truncate">{vec.evm.slice(0, 10)}…{vec.evm.slice(-6)}</span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
@@ -483,9 +548,21 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                 </div>
               )}
 
-              {/* TAB 2: Live Nexus AMM (native POT / pUSDC) */}
+              {/* TAB 2: Real Transfers & Faucet Panel */}
+              {activeTab === 'transfers' && (
+                <TransferPanel
+                  evmWallet={evmWallet}
+                  evmWalletState={evmWalletState}
+                  substrateWallet={substrateWallet}
+                  substrateWalletState={substrateWalletState}
+                  pusdcBalance={pusdcBalance}
+                  onRefreshBalances={refreshBalances}
+                />
+              )}
+
+              {/* TAB 3: Live Nexus AMM (native POT / pUSDC) */}
               {activeTab === 'swap' && (
-                <AmmPanel evmClient={evmClient} wallet={evmWalletState} />
+                <AmmPanel evmClient={evmClient} wallet={evmWalletState} evmWallet={evmWallet} />
               )}
 
             </div>
@@ -602,12 +679,12 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                 LIVE ON-CHAIN PROOF
               </span>
               <span id="proof-status" className="text-slate-300">
-                Connected to Portaldot V3 Dual-VM Runtime (Read-Only Foundation Mode)
+                Connected to Portaldot V3 Dual-VM Runtime (Interactive dApp Mode)
               </span>
             </div>
             <div className="flex items-center gap-4">
               <span className="text-slate-400">
-                Write Barrier: <strong className="text-amber-400">Disabled ($0 Budget Guarantee)</strong>
+                Wallet Signer: <strong className="text-emerald-400">User Injected (Zero Silent Broadcasts)</strong>
               </span>
               <a
                 href={NETWORK_CONFIG.explorerUrl}
@@ -620,6 +697,60 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
             </div>
           </div>
         </footer>
+
+        {/* Floating Transaction Notification Toast */}
+        {recentTx && !dismissTx && (
+          <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-gray-900/95 border border-cyan-500/40 rounded-2xl p-4 shadow-2xl backdrop-blur-md transition-all animate-in slide-in-from-bottom">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                {recentTx.status === 'CONFIRMED' ? (
+                  <CheckIcon className="w-5 h-5 text-emerald-400 shrink-0" />
+                ) : recentTx.status === 'REVERTED' || recentTx.status === 'ERROR' || recentTx.status === 'REJECTED' ? (
+                  <AlertIcon className="w-5 h-5 text-rose-400 shrink-0" />
+                ) : (
+                  <RefreshIcon className="w-5 h-5 text-cyan-400 animate-spin shrink-0" />
+                )}
+                <div>
+                  <p className="text-xs font-bold text-white mono uppercase">{recentTx.label}</p>
+                  <p className="text-[11px] text-slate-300 mono mt-0.5">
+                    Status:{' '}
+                    <span className={
+                      recentTx.status === 'CONFIRMED' ? 'text-emerald-400 font-bold' :
+                      recentTx.status === 'REVERTED' || recentTx.status === 'ERROR' || recentTx.status === 'REJECTED' ? 'text-rose-400 font-bold' :
+                      'text-cyan-300 font-bold'
+                    }>
+                      {recentTx.status}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDismissTx(true)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            {recentTx.txHash && (
+              <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[11px] mono">
+                <span className="text-slate-400 truncate max-w-[200px]">{recentTx.txHash}</span>
+                <a
+                  href={`${PORTALDOT_EXPLORER_URL}/tx/${recentTx.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:underline flex items-center gap-1 shrink-0"
+                >
+                  Explorer <ExternalLinkIcon className="w-3 h-3" />
+                </a>
+              </div>
+            )}
+            {recentTx.error && (
+              <p className="mt-2 text-[10px] mono text-rose-300 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
+                {recentTx.error}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Portaldot V3 Testnet Wallet-Native Deployment Modal */}
         <DeploymentModal
