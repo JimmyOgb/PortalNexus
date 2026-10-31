@@ -10,6 +10,7 @@ export const PORTALDOT_CHAIN_ID_DEC = 420420777;
 export const PORTALDOT_CHAIN_ID_HEX = '0x190f1ca9';
 export const PORTALDOT_RPC_URL = 'https://test-evm-rpc-v3.portaldot.dev';
 export const PORTALDOT_EXPLORER_URL = 'https://node-console.portaldot.dev/';
+export const EVM_PREF_CONNECTED_KEY = 'portalnexus_evm_connected';
 
 export interface EvmWalletState {
   isConnected: boolean;
@@ -41,6 +42,7 @@ export class EvmWalletService {
     isConnecting: false,
   };
   private listeners: ((state: EvmWalletState) => void)[] = [];
+  private listenersInitialized: boolean = false;
 
   constructor(customProvider?: EthereumProvider) {
     if (customProvider) {
@@ -52,6 +54,7 @@ export class EvmWalletService {
 
   public setProvider(provider: EthereumProvider | null): void {
     this.provider = provider;
+    this.listenersInitialized = false;
   }
 
   public getState(): EvmWalletState {
@@ -77,7 +80,8 @@ export class EvmWalletService {
   }
 
   public initListeners(): void {
-    if (!this.provider?.on) return;
+    if (!this.provider?.on || this.listenersInitialized) return;
+    this.listenersInitialized = true;
 
     this.provider.on('accountsChanged', (accounts: string[]) => {
       if (!accounts || accounts.length === 0) {
@@ -132,6 +136,14 @@ export class EvmWalletService {
         error: isCorrect ? null : `Connected to Chain ID ${chainId}. Switch to Portaldot V3 (${PORTALDOT_CHAIN_ID_DEC})`
       });
 
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem(EVM_PREF_CONNECTED_KEY, 'true');
+        } catch {
+          // Ignore storage quota or access errors
+        }
+      }
+
       this.initListeners();
       await this.refreshBalance();
       return true;
@@ -143,6 +155,61 @@ export class EvmWalletService {
         isConnecting: false,
         error: msg
       });
+      return false;
+    }
+  }
+
+  /**
+   * Performs non-intrusive, passive EVM wallet discovery using eth_accounts.
+   * Never triggers a wallet popup or prompts unauthorized accounts.
+   */
+  public async checkExistingConnection(): Promise<boolean> {
+    if (!this.provider && typeof window !== 'undefined' && (window as any).ethereum) {
+      this.provider = (window as any).ethereum;
+    }
+    if (!this.provider) return false;
+
+    let wasPreviouslyConnected = false;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        wasPreviouslyConnected = window.localStorage.getItem(EVM_PREF_CONNECTED_KEY) === 'true';
+      } catch {
+        wasPreviouslyConnected = false;
+      }
+    }
+
+    try {
+      const accounts: string[] = await this.provider.request({ method: 'eth_accounts' });
+      if (!accounts || accounts.length === 0) {
+        if (wasPreviouslyConnected) {
+          this.disconnect();
+        }
+        return false;
+      }
+
+      const chainIdHex: string = await this.provider.request({ method: 'eth_chainId' });
+      const chainId = parseInt(chainIdHex, 16);
+      const isCorrect = chainId === PORTALDOT_CHAIN_ID_DEC;
+
+      this.updateState({
+        isConnected: true,
+        address: accounts[0],
+        chainId,
+        isCorrectNetwork: isCorrect,
+        isConnecting: false,
+        error: isCorrect ? null : `Connected to Chain ID ${chainId}. Switch to Portaldot V3 (${PORTALDOT_CHAIN_ID_DEC})`
+      });
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem(EVM_PREF_CONNECTED_KEY, 'true');
+        } catch {}
+      }
+
+      this.initListeners();
+      await this.refreshBalance();
+      return true;
+    } catch {
       return false;
     }
   }
@@ -299,6 +366,13 @@ export class EvmWalletService {
   }
 
   public disconnect(): void {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(EVM_PREF_CONNECTED_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     this.updateState({
       isConnected: false,
       address: null,

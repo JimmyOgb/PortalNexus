@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { EvmWalletService, EvmWalletState, PORTALDOT_EXPLORER_URL } from '../services/evmWallet';
 import { SubstrateWalletService, SubstrateWalletState } from '../services/substrateWallet';
+import { SubstrateRpcClient } from '../services/substrateRpc';
 import { LIVE_DEPLOYMENT } from '../contracts/config';
 import { SELECTORS, encodeCall, isAddress } from '../contracts/abi';
 import { parseTokenAmount, formatTokenAmount } from '../services/contractMath';
 import { globalTxService } from '../services/transactionService';
+import { globalSubstrateTransferService } from '../services/substrateTransferService';
+import { PORTALDOT_SUBSTRATE_CONSTANTS } from '../lib/substrateUtils';
 import { SendIcon, AlertIcon, CheckIcon, ExternalLinkIcon, RefreshIcon } from './Icons';
 
 interface Props {
@@ -14,6 +17,7 @@ interface Props {
   substrateWalletState: SubstrateWalletState;
   pusdcBalance: bigint | null;
   onRefreshBalances: () => void;
+  substrateRpc?: SubstrateRpcClient;
 }
 
 type TransferMode = 'evm_pot' | 'evm_pusdc' | 'substrate_pot';
@@ -24,7 +28,8 @@ export const TransferPanel: React.FC<Props> = ({
   substrateWallet,
   substrateWalletState,
   pusdcBalance,
-  onRefreshBalances
+  onRefreshBalances,
+  substrateRpc
 }) => {
   const [mode, setMode] = useState<TransferMode>('evm_pusdc');
   const [recipient, setRecipient] = useState('');
@@ -38,6 +43,7 @@ export const TransferPanel: React.FC<Props> = ({
   const isEvmConnected = evmWalletState.isConnected && !!evmWalletState.address;
   const isCorrectNetwork = evmWalletState.isCorrectNetwork;
   const isSubstrateConnected = substrateWalletState.isConnected && !!substrateWalletState.selectedAccount;
+  const isSubstrateSignerAvailable = isSubstrateConnected && substrateWallet.isExtrinsicSignerAvailable();
 
   const handleTransfer = async () => {
     setErrorMsg(null);
@@ -125,22 +131,34 @@ export const TransferPanel: React.FC<Props> = ({
         setStatusMsg(null);
       }
     } else {
-      // Substrate Native Transfer
+      // Substrate Native Transfer (SEC-01: Genuine extrinsic dispatch)
       if (!isSubstrateConnected) {
         setErrorMsg('Please connect your Substrate wallet extension first.');
         return;
       }
-      if (!cleanRecipient.startsWith('5')) {
-        setErrorMsg('Invalid Substrate address. Must be a valid SS58 address starting with 5 (Prefix 42).');
+      if (!substrateWallet.isExtrinsicSignerAvailable()) {
+        setErrorMsg(
+          'Connected Substrate wallet extension does not support extrinsic signing (signPayload unavailable). Genuine on-chain transfers are unavailable with this adapter.'
+        );
         return;
       }
 
       setIsSubmitting(true);
-      setStatusMsg('Signing Substrate native transfer payload...');
+      setStatusMsg('Validating transfer and preparing balances.transfer_keep_alive extrinsic...');
       try {
-        const payload = `transfer:${cleanRecipient}:${cleanAmount}:POT:${Date.now()}`;
-        const sig = await substrateWallet.signRaw(payload);
-        setSuccessMsg(`Substrate transfer authorized and signed! Signature: ${sig.slice(0, 16)}…`);
+        const targetRpc = substrateRpc || substrateWallet.getRpcClient() || new SubstrateRpcClient();
+        const res = await globalSubstrateTransferService.executeTransfer({
+          recipientSS58: cleanRecipient,
+          amountStr: cleanAmount,
+          wallet: substrateWallet,
+          rpc: targetRpc,
+          onStatusUpdate: (msg) => setStatusMsg(msg)
+        });
+
+        setTxHash(res.txHash);
+        setSuccessMsg(
+          `Successfully dispatched and finalized native tPOT transfer on Portaldot V3! (Finalized Block #${res.blockNumber})`
+        );
         setAmount('');
         onRefreshBalances();
       } catch (err: any) {
@@ -251,29 +269,47 @@ export const TransferPanel: React.FC<Props> = ({
         </button>
       </div>
 
-      {/* Testnet Faucet Banner for pUSDC */}
+      {/* Testnet Faucet Banner for pUSDC with SEC-05 Disclosure */}
       {mode === 'evm_pusdc' && (
-        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold text-cyan-200">Need Testnet Stablecoins?</p>
-            <p className="text-[11px] text-slate-400">Claim 10,000 pUSDC simulation tokens directly from the verified contract faucet.</p>
+        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-cyan-200">Need Testnet Stablecoins? (pUSDC Faucet)</p>
+              <p className="text-[11px] text-slate-300">Claim 10,000 pUSDC simulation tokens directly from the verified contract faucet.</p>
+            </div>
+            <button
+              type="button"
+              id="btn-claim-faucet"
+              disabled={isSubmitting || !isEvmConnected || !isCorrectNetwork}
+              onClick={handleClaimFaucet}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold mono bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Claim 10,000 pUSDC
+            </button>
           </div>
-          <button
-            type="button"
-            id="btn-claim-faucet"
-            disabled={isSubmitting || !isEvmConnected || !isCorrectNetwork}
-            onClick={handleClaimFaucet}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold mono bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            Claim 10,000 pUSDC
-          </button>
+          <p className="text-[10px] text-slate-400 border-t border-cyan-500/20 pt-1.5 leading-relaxed">
+            <strong className="text-cyan-300">Policy Disclosure:</strong> The 10,000 pUSDC limit is strictly an on-chain per-call cap (<code className="text-cyan-200">MAX_MINT_PER_CALL</code>), not a total supply cap. Faucet minting is permissionless, has no cooldown period, and can be invoked repeatedly in successive transactions. pUSDC is strictly an unrestricted testnet simulation token with zero backing and zero real-world value.
+          </p>
+        </div>
+      )}
+
+      {/* Substrate Adapter Capability Warning (SEC-01) */}
+      {mode === 'substrate_pot' && isSubstrateConnected && !isSubstrateSignerAvailable && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs mono text-amber-200 space-y-1">
+          <p className="font-semibold flex items-center gap-1.5 text-amber-300">
+            <AlertIcon className="w-4 h-4 shrink-0 text-amber-400" />
+            Extrinsic Signer Unavailable in Connected Adapter
+          </p>
+          <p className="text-[11px] text-amber-300/80 leading-relaxed">
+            The connected wallet extension does not support standard Substrate extrinsic signing (<code className="text-amber-200">signPayload</code> unavailable). To prevent misleading user expectations, PortalNexus refuses to substitute off-chain message signatures (<code className="text-amber-200">signRaw</code>) for real transfers. Connect an extrinsic-capable extension (e.g. Polkadot.js, Talisman, SubWallet) to submit transactions.
+          </p>
         </div>
       )}
 
       {/* Recipient Input */}
       <div className="space-y-1.5">
         <label className="text-xs text-slate-400 mono">
-          {mode === 'substrate_pot' ? 'Recipient Substrate SS58 Address (Prefix 42)' : 'Recipient EVM Address (0x...)'}
+          {mode === 'substrate_pot' ? 'Recipient Substrate SS58 Address (Prefix 42, starts with 5)' : 'Recipient EVM Address (0x...)'}
         </label>
         <input
           type="text"
@@ -287,7 +323,7 @@ export const TransferPanel: React.FC<Props> = ({
       {/* Amount Input */}
       <div className="space-y-1.5">
         <label className="text-xs text-slate-400 mono">
-          Amount to Send ({mode === 'evm_pusdc' ? 'pUSDC' : 'POT'})
+          Amount to Send ({mode === 'evm_pusdc' ? 'pUSDC' : mode === 'evm_pot' ? 'POT' : 'tPOT'})
         </label>
         <div className="relative">
           <input
@@ -311,12 +347,17 @@ export const TransferPanel: React.FC<Props> = ({
             MAX
           </button>
         </div>
+        {mode === 'substrate_pot' && (
+          <p className="text-[10px] text-purple-300/80 mono">
+            Keep-Alive Rule: <code className="text-purple-200">balances.transfer_keep_alive</code> requires retaining at least {PORTALDOT_SUBSTRATE_CONSTANTS.existentialDepositFormatted} (Existential Deposit) in your account.
+          </p>
+        )}
       </div>
 
       {/* Status & Error Feedback */}
       {statusMsg && (
         <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs mono text-cyan-300 flex items-center gap-2">
-          <RefreshIcon className="w-4 h-4 animate-spin" />
+          <RefreshIcon className="w-4 h-4 animate-spin shrink-0" />
           <span>{statusMsg}</span>
         </div>
       )}
@@ -336,9 +377,13 @@ export const TransferPanel: React.FC<Props> = ({
           </div>
           {txHash && (
             <div className="pt-1 text-[11px] text-slate-300 flex items-center gap-2">
-              <span>Tx: <code className="text-white">{txHash.slice(0, 10)}…{txHash.slice(-8)}</code></span>
+              <span>Tx / Extrinsic: <code className="text-white">{txHash.slice(0, 10)}…{txHash.slice(-8)}</code></span>
               <a
-                href={`${PORTALDOT_EXPLORER_URL}/tx/${txHash}`}
+                href={
+                  mode === 'substrate_pot'
+                    ? `https://node-console.portaldot.dev/#/explorer/query/${txHash}`
+                    : `${PORTALDOT_EXPLORER_URL}/tx/${txHash}`
+                }
                 target="_blank"
                 rel="noreferrer"
                 className="text-cyan-400 hover:underline flex items-center gap-0.5"
@@ -353,11 +398,17 @@ export const TransferPanel: React.FC<Props> = ({
       {/* Action Button */}
       <button
         onClick={handleTransfer}
-        disabled={isSubmitting}
+        disabled={isSubmitting || (mode === 'substrate_pot' && !isSubstrateSignerAvailable)}
         className="w-full py-3.5 rounded-xl font-bold text-xs mono uppercase tracking-wider bg-gradient-to-r from-emerald-500 via-cyan-500 to-purple-600 text-black hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition"
       >
         <SendIcon className="w-4 h-4" />
-        <span>{isSubmitting ? 'Authorizing in Wallet…' : 'Submit Transfer'}</span>
+        <span>
+          {isSubmitting
+            ? 'Authorizing in Wallet…'
+            : mode === 'substrate_pot' && !isSubstrateSignerAvailable
+            ? 'Extrinsic Signer Unavailable'
+            : 'Submit Transfer'}
+        </span>
       </button>
 
       <p className="text-[10px] text-slate-400 text-center mono">

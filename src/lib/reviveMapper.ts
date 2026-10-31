@@ -37,6 +37,31 @@ export function base58Encode(bytes: Uint8Array): string {
   return str;
 }
 
+export function base58Decode(str: string): Uint8Array {
+  const bytes = [0];
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    const val = B58_ALPHABET.indexOf(c);
+    if (val === -1) {
+      throw new Error(`Illegal Base58 character: "${c}"`);
+    }
+    let carry = val;
+    for (let j = 0; j < bytes.length; j++) {
+      carry += bytes[j] * 58;
+      bytes[j] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      bytes.push(carry & 0xff);
+      carry >>= 8;
+    }
+  }
+  for (let i = 0; i < str.length && str[i] === '1'; i++) {
+    bytes.push(0);
+  }
+  return new Uint8Array(bytes.reverse());
+}
+
 const IV = [
   0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn,
   0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
@@ -64,9 +89,9 @@ function rotr64(x: bigint, n: number): bigint {
   return ((x >> shift) | (x << (64n - shift))) & 0xffffffffffffffffn;
 }
 
-export function blake2b512(input: Uint8Array): Uint8Array {
+export function blake2b(input: Uint8Array, outLen = 64): Uint8Array {
   const h = [...IV];
-  h[0] ^= 0x01010040n;
+  h[0] ^= 0x01010000n ^ BigInt(outLen);
 
   const block = new Uint8Array(128);
   block.set(input);
@@ -109,7 +134,15 @@ export function blake2b512(input: Uint8Array): Uint8Array {
   const out = new Uint8Array(64);
   const out64 = new BigUint64Array(out.buffer);
   for (let i = 0; i < 8; i++) out64[i] = h[i];
-  return out;
+  return out.slice(0, outLen);
+}
+
+export function blake2b512(input: Uint8Array): Uint8Array {
+  return blake2b(input, 64);
+}
+
+export function blake2b128(input: Uint8Array): Uint8Array {
+  return blake2b(input, 16);
 }
 
 /**

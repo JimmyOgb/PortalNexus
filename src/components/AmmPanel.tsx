@@ -434,30 +434,56 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
         </div>
       )}
       {mode === 'add' && (
-        <div className="space-y-2">
-          <AmountInput id="add-pot" label="Native POT" value={addPot} onChange={setAddPot} />
-          <AmountInput id="add-usdc" label="pUSDC (max to deposit)" value={addUsdc} onChange={setAddUsdc} />
+        <div className="space-y-3">
+          <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs mono text-purple-200 space-y-1">
+            <p className="font-semibold text-purple-300">
+              ℹ️ Architecture A LP Position Disclosure: Non-Transferable (Soulbound)
+            </p>
+            <p className="text-[11px] text-purple-300/80 leading-relaxed">
+              In Architecture A (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
+            </p>
+          </div>
+          <div className="space-y-2">
+            <AmountInput id="add-pot" label="Native POT" value={addPot} onChange={setAddPot} />
+            <AmountInput id="add-usdc" label="pUSDC (max to deposit)" value={addUsdc} onChange={setAddUsdc} />
+          </div>
         </div>
       )}
       {mode === 'remove' && (
-        <div className="space-y-2 text-xs mono">
-          {!account && <p className="text-slate-400">Connect wallet to see your LP positions.</p>}
-          {account && data?.positionsError && <p className="text-rose-400">{data.positionsError}</p>}
-          {account && data && !data.positionsError && data.positions.length === 0 && <p id="no-positions" className="text-slate-400">No LP positions found for this wallet.</p>}
-          {data?.positions.map((p) => (
-            <label key={p.tokenId.toString()} className="flex items-start gap-2 p-2 rounded-lg bg-black/40 border border-white/10">
-              <input type="radio" name="pos" checked={selectedToken === p.tokenId.toString()} onChange={() => setSelectedToken(p.tokenId.toString())} />
-              <span>
-                #{p.tokenId.toString()} · {p.shares.toString()} shares · deposited {fmtPot(p.potDeposited)} POT / {fmtUsdc(p.usdcDeposited)} pUSDC ·
-                now ≈ {fmtPot(p.currentPot)} POT / {fmtUsdc(p.currentUsdc)} pUSDC
-              </span>
-            </label>
-          ))}
+        <div className="space-y-3">
+          <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-xs mono text-purple-200 space-y-1">
+            <p className="font-semibold text-purple-300">
+              ℹ️ Architecture A LP Position Disclosure: Non-Transferable (Soulbound)
+            </p>
+            <p className="text-[11px] text-purple-300/80 leading-relaxed">
+              In Architecture A (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
+            </p>
+          </div>
+          <div className="space-y-2 text-xs mono">
+            {!account && <p className="text-slate-400">Connect wallet to see your LP positions.</p>}
+            {account && data?.positionsError && <p className="text-rose-400">{data.positionsError}</p>}
+            {account && data && !data.positionsError && data.positions.length === 0 && <p id="no-positions" className="text-slate-400">No LP positions found for this wallet.</p>}
+            {data?.positions.map((p) => (
+              <label key={p.tokenId.toString()} className="flex items-start gap-2 p-2 rounded-lg bg-black/40 border border-white/10">
+                <input type="radio" name="pos" checked={selectedToken === p.tokenId.toString()} onChange={() => setSelectedToken(p.tokenId.toString())} />
+                <span>
+                  #{p.tokenId.toString()} · {p.shares.toString()} shares · deposited {fmtPot(p.potDeposited)} POT / {fmtUsdc(p.usdcDeposited)} pUSDC ·
+                  now ≈ {fmtPot(p.currentPot)} POT / {fmtUsdc(p.currentUsdc)} pUSDC
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
       {mode === 'faucet' && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <AmountInput id="faucet-amt" label={`pUSDC to claim (max 10,000 per call)`} value={faucetAmt} onChange={setFaucetAmt} />
+          <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs mono text-cyan-200 space-y-1">
+            <p className="font-semibold text-cyan-300">Testnet Simulation Faucet Policy (SEC-05)</p>
+            <p className="text-[11px] text-cyan-300/80 leading-relaxed">
+              The 10,000 pUSDC cap is enforced per call on-chain (<code>MAX_MINT_PER_CALL</code>), not as a global supply cap. Faucet minting is permissionless, has no cooldown, and may be called repeatedly in successive transactions. pUSDC is strictly an unrestricted testnet simulation token with zero backing or real-world value.
+            </p>
+          </div>
         </div>
       )}
 

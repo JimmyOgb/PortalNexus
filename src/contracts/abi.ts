@@ -25,7 +25,62 @@ export const SELECTORS = {
   swapExactTokensForPOT: '0x5b31b707', // (uint256,uint256,address,uint256)
   getPosition: '0xeb02c301', // getPosition(uint256) -> (address,uint256,uint256,uint256,uint256)
   ownerOf: '0x6352211e', // ownerOf(uint256)
+  // PortalTestStorage (Stage 3D / 4.1 Verified Contract)
+  getValue: '0x20965255', // getValue() -> uint256
+  creator: '0x02d05d3f', // creator() -> address
+  value: '0x3fa4f245', // value() -> uint256
+  setValue: '0x55241077', // setValue(uint256)
 } as const;
+
+/** topic0 of ValueUpdated (indexed previousValue = topic1, indexed newValue = topic2) */
+export const VALUE_UPDATED_TOPIC_SIGNATURE = 'ValueUpdated(uint256,uint256)';
+export const VALUE_UPDATED_TOPIC0 = '0x253ac2c290fb3c37b20cfd60899ed86c0c8313905edc8ca53ec8d2b69d9919ad';
+
+/** Complete Verified ABI for PortalTestStorage */
+export const PORTAL_TEST_STORAGE_ABI = [
+  {
+    inputs: [{ internalType: 'uint256', name: 'initialValue', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'constructor'
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'uint256', name: 'previousValue', type: 'uint256' },
+      { indexed: true, internalType: 'uint256', name: 'newValue', type: 'uint256' }
+    ],
+    name: 'ValueUpdated',
+    type: 'event'
+  },
+  {
+    inputs: [],
+    name: 'creator',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [],
+    name: 'getValue',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ internalType: 'uint256', name: 'newValue', type: 'uint256' }],
+    name: 'setValue',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [],
+    name: 'value',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  }
+] as const;
 
 /** topic0 of LiquidityAdded (indexed provider = topic1, indexed tokenId = topic2) */
 export const LIQUIDITY_ADDED_TOPIC_SIGNATURE = 'LiquidityAdded(address,uint256,uint256,uint256,uint256)';

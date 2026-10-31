@@ -1,0 +1,24 @@
+{
+  "network": "Portaldot V3 Testnet",
+  "chainId": 420420777,
+  "contractName": "PortalTestStorage",
+  "sourceFile": "contracts/contracts/PortalTestStorage.sol",
+  "constructorArgument": "42",
+  "deployer": "0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A",
+  "contractAddress": "0x5065125265638A4b354FDDfe1f9339F65cC9f6F8",
+  "transactionHash": "0x3ff04400eab1b83d221444f5cd2ff829a39154c54c7562dea7dbc06ae304722e",
+  "blockNumber": 261857,
+  "blockHash": "0xf3920d7af9d96c70d3614e606dad800dfee1ddfe1d226885ceab657763c71904",
+  "gasUsed": "1480293021720810",
+  "effectiveGasPriceWei": "25980",
+  "actualFeePot": "38.4580127043066438",
+  "balanceBeforePot": "113.088472552168753",
+  "balanceAfterPot": "74.6304598478621092",
+  "totalBalanceSpentPot": "38.4580127043066438",
+  "bytecodeSizeBytes": 275,
+  "verifiedGetters": {
+    "getValue()": "42",
+    "creator()": "0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A"
+  },
+  "timestamp": "2026-10-31T04:04:39.928Z"
+}

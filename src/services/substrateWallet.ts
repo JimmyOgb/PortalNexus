@@ -10,6 +10,10 @@
  */
 
 import { SubstrateRpcClient } from './substrateRpc';
+import { SubstrateSignerPayloadJSON } from '../lib/substrateUtils';
+
+export const SUBSTRATE_PREF_EXTENSION_KEY = 'portalnexus_preferred_sub_ext';
+export const SUBSTRATE_PREF_ADDRESS_KEY = 'portalnexus_preferred_sub_addr';
 
 export interface InjectedAccount {
   address: string; // SS58 address
@@ -146,6 +150,44 @@ export class SubstrateWalletService {
         error: null
       });
 
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem(SUBSTRATE_PREF_EXTENSION_KEY, targetExt);
+          window.localStorage.setItem(SUBSTRATE_PREF_ADDRESS_KEY, primary.address);
+        } catch {
+          // Ignore storage errors
+        }
+      }
+
+      // Bind accounts subscription if provider supports it for real-time account switching
+      if (injectedInstance.accounts && typeof injectedInstance.accounts.subscribe === 'function') {
+        try {
+          injectedInstance.accounts.subscribe((newAccounts: any[]) => {
+            if (!newAccounts || newAccounts.length === 0) {
+              this.disconnect();
+            } else {
+              const updatedAccounts: InjectedAccount[] = newAccounts.map((a: any) => ({
+                address: a.address,
+                name: a.name || 'Account',
+                source: targetExt
+              }));
+              const current = this.state.selectedAccount;
+              const nextAccount = current
+                ? updatedAccounts.find(a => a.address === current.address) || updatedAccounts[0]
+                : updatedAccounts[0];
+
+              this.updateState({
+                accounts: updatedAccounts,
+                selectedAccount: nextAccount
+              });
+              this.refreshBalance(nextAccount.address);
+            }
+          });
+        } catch {
+          // Ignore subscription setup errors
+        }
+      }
+
       await this.refreshBalance(primary.address);
       return true;
     } catch (err: any) {
@@ -162,7 +204,124 @@ export class SubstrateWalletService {
 
   public selectAccount(account: InjectedAccount): void {
     this.updateState({ selectedAccount: account });
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(SUBSTRATE_PREF_ADDRESS_KEY, account.address);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     this.refreshBalance(account.address);
+  }
+
+  /**
+   * Safely attempts to restore an existing Substrate wallet authorization after page reload.
+   * Only attempts connection if a preferred extension was previously authorized by the user.
+   * If authorization is revoked, locked, or unavailable, cleanly resets to disconnected state.
+   */
+  public async autoReconnect(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    let savedExt: string | null = null;
+    let savedAddress: string | null = null;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        savedExt = window.localStorage.getItem(SUBSTRATE_PREF_EXTENSION_KEY);
+        savedAddress = window.localStorage.getItem(SUBSTRATE_PREF_ADDRESS_KEY);
+      } catch {
+        return false;
+      }
+    }
+
+    if (!savedExt) return false;
+
+    const injected = (window as any).injectedWeb3;
+    if (!injected || typeof injected !== 'object' || !injected[savedExt]) {
+      return false;
+    }
+
+    const provider = injected[savedExt];
+    if (!provider || typeof provider.enable !== 'function') {
+      return false;
+    }
+
+    try {
+      const injectedInstance = await provider.enable('PortalNexus');
+      this.injectedInstance = injectedInstance;
+      this.signer = injectedInstance.signer || null;
+
+      let accountsList: any[] = [];
+      if (injectedInstance.accounts && typeof injectedInstance.accounts.get === 'function') {
+        accountsList = await injectedInstance.accounts.get();
+      }
+
+      if (!accountsList || accountsList.length === 0) {
+        this.disconnect();
+        return false;
+      }
+
+      const formattedAccounts: InjectedAccount[] = accountsList.map((a: any) => ({
+        address: a.address,
+        name: a.name || 'Account',
+        source: savedExt!
+      }));
+
+      const matchedAccount = savedAddress
+        ? formattedAccounts.find(a => a.address === savedAddress) || formattedAccounts[0]
+        : formattedAccounts[0];
+
+      const available = Object.keys(injected);
+
+      this.updateState({
+        isConnected: true,
+        selectedAccount: matchedAccount,
+        accounts: formattedAccounts,
+        availableExtensions: available,
+        isConnecting: false,
+        error: null
+      });
+
+      // Bind accounts subscription if provider supports it for real-time account switching
+      if (injectedInstance.accounts && typeof injectedInstance.accounts.subscribe === 'function') {
+        try {
+          injectedInstance.accounts.subscribe((newAccounts: any[]) => {
+            if (!newAccounts || newAccounts.length === 0) {
+              this.disconnect();
+            } else {
+              const updatedAccounts: InjectedAccount[] = newAccounts.map((a: any) => ({
+                address: a.address,
+                name: a.name || 'Account',
+                source: savedExt!
+              }));
+              const current = this.state.selectedAccount;
+              const nextAccount = current
+                ? updatedAccounts.find(a => a.address === current.address) || updatedAccounts[0]
+                : updatedAccounts[0];
+
+              this.updateState({
+                accounts: updatedAccounts,
+                selectedAccount: nextAccount
+              });
+              this.refreshBalance(nextAccount.address);
+            }
+          });
+        } catch {
+          // Ignore subscription setup errors
+        }
+      }
+
+      await this.refreshBalance(matchedAccount.address);
+      return true;
+    } catch {
+      // Permission revoked or wallet locked: clean up preference and fail closed
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.removeItem(SUBSTRATE_PREF_EXTENSION_KEY);
+          window.localStorage.removeItem(SUBSTRATE_PREF_ADDRESS_KEY);
+        } catch {}
+      }
+      return false;
+    }
   }
 
   public async refreshBalance(address?: string): Promise<void> {
@@ -190,6 +349,43 @@ export class SubstrateWalletService {
     return this.injectedInstance;
   }
 
+  public getRpcClient(): SubstrateRpcClient | null {
+    return this.substrateRpc;
+  }
+
+  /**
+   * Returns true only if the connected wallet extension exposes the standard
+   * extrinsic signer method `signPayload`.
+   */
+  public isExtrinsicSignerAvailable(): boolean {
+    return Boolean(this.signer && typeof this.signer.signPayload === 'function');
+  }
+
+  /**
+   * Prompts the connected Substrate wallet to sign a genuine extrinsic payload.
+   */
+  public async signPayload(payload: SubstrateSignerPayloadJSON): Promise<{ id: number; signature: string }> {
+    if (!this.signer || typeof this.signer.signPayload !== 'function' || !this.state.selectedAccount) {
+      throw new Error(
+        'Connected Substrate wallet extension does not support extrinsic signing (signPayload unavailable). Genuine on-chain transfers are unavailable with this adapter.'
+      );
+    }
+
+    try {
+      const res = await this.signer.signPayload(payload);
+      if (!res || !res.signature) {
+        throw new Error('Wallet returned an empty signature for extrinsic payload.');
+      }
+      return { id: res.id ?? 1, signature: res.signature };
+    } catch (err: any) {
+      const msg = err?.message?.toLowerCase() || '';
+      if (msg.includes('reject') || msg.includes('denied') || msg.includes('cancel') || err?.code === 4001) {
+        throw new Error('Extrinsic signing request was rejected by user in Substrate wallet.');
+      }
+      throw new Error(err?.message || 'Failed to sign extrinsic payload with Substrate wallet.');
+    }
+  }
+
   /**
    * Prompts connected Substrate wallet to sign a raw payload or message.
    */
@@ -215,6 +411,14 @@ export class SubstrateWalletService {
   public disconnect(): void {
     this.injectedInstance = null;
     this.signer = null;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(SUBSTRATE_PREF_EXTENSION_KEY);
+        window.localStorage.removeItem(SUBSTRATE_PREF_ADDRESS_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
     this.updateState({
       isConnected: false,
       selectedAccount: null,

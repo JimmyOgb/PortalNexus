@@ -81,16 +81,23 @@ export class EvmRpcClient {
   }
 
   public async start(): Promise<void> {
-    if (this.isDestroyed) return;
+    this.isDestroyed = false;
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
 
     this.updateState({ status: 'CONNECTING', error: null });
 
     try {
       await this.fetchInitialIdentity();
+      if (this.isDestroyed) return;
       await this.pollBlock();
+      if (this.isDestroyed) return;
       this.updateState({ status: 'CONNECTED', error: null, freshness: 'LIVE' });
       this.startPolling();
     } catch (err: any) {
+      if (this.isDestroyed) return;
       this.updateState({
         status: 'ERROR',
         error: `Failed to initialize EVM RPC: ${err.message}`,
@@ -166,19 +173,27 @@ export class EvmRpcClient {
 
       this.updateState(updates);
     } catch (err: any) {
-      this.updateState({
-        status: 'ERROR',
-        freshness: 'STALE',
-        error: `EVM poll failed: ${err.message}`
-      });
+      if (!this.isDestroyed) {
+        this.updateState({
+          status: 'ERROR',
+          freshness: 'STALE',
+          error: `EVM poll failed: ${err.message}`
+        });
+      }
     }
   }
 
   private startPolling(): void {
-    if (this.pollInterval) clearInterval(this.pollInterval);
-    this.pollInterval = window.setInterval(() => {
-      this.pollBlock();
-    }, 4000);
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+    if (this.isDestroyed) return;
+    this.pollInterval = (typeof window !== 'undefined' ? window.setInterval : setInterval)(() => {
+      if (!this.isDestroyed) {
+        this.pollBlock();
+      }
+    }, 4000) as unknown as number;
   }
 
   private updateState(partial: Partial<EvmChainState>): void {
@@ -188,7 +203,10 @@ export class EvmRpcClient {
 
   public destroy(): void {
     this.isDestroyed = true;
-    if (this.pollInterval) clearInterval(this.pollInterval);
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
     this.updateState({ status: 'DISCONNECTED', freshness: 'UNAVAILABLE' });
   }
 }

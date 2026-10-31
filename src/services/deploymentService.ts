@@ -13,13 +13,52 @@
  */
 
 import { EvmRpcClient } from './evmRpc';
-import { EvmWalletService, PORTALDOT_CHAIN_ID_DEC } from './evmWallet';
+import { EvmWalletService, PORTALDOT_CHAIN_ID_DEC, PORTALDOT_EXPLORER_URL } from './evmWallet';
 import {
   WPOT_BYTECODE,
   TEST_USDC_BYTECODE,
   NEXUS_AMM_BYTECODE
 } from '../contracts/deploymentData';
-import { CONTRACT_REGISTRY } from '../contracts/config';
+import { CONTRACT_REGISTRY, BUILTIN_DEPLOYMENT } from '../contracts/config';
+import { isAddress } from '../contracts/abi';
+import { encodeConstructorArgs, ConstructorParam } from '../lib/abiEncoder';
+
+export interface CustomContractDeploymentPlan {
+  contractName: string;
+  fileName: string;
+  compilerVersion: string;
+  optimizer: boolean;
+  optimizerRuns: number;
+  evmVersion: string;
+  deployerAddress: string;
+  chainId: number;
+  isCorrectNetwork: boolean;
+  constructorParams: ConstructorParam[];
+  paramValues: Record<string, any>;
+  encodedConstructorArgs: string;
+  creationBytecode: string;
+  bytecodeSizeBytes: number;
+  estimatedGas: string;
+  estimatedGasDecimal: string;
+  gasPriceGwei: string;
+  estimatedGasFeePot: string;
+  deployerPotBalance: string | null;
+  isSufficientBalance: boolean;
+  warnings: string[];
+  isValid: boolean;
+  validationError?: string;
+}
+
+export interface CustomRegistryEntry {
+  arch: 'archA' | 'archB';
+  pusdcAddress: string;
+  ammAddress: string;
+  wpotAddress?: string | null;
+  receiptAddress?: string | null;
+  txHash?: string | null;
+  blockNumber?: number | null;
+  activatedAt: number;
+}
 
 export type DeploymentStep =
   | 'IDLE'
@@ -73,6 +112,8 @@ export interface DeploymentServiceState {
   nexusAMM: ContractDeployRecord;
   nexusReceipt: ContractDeployRecord;
   isCommittedToConfig: boolean;
+  customRegistryEntry: CustomRegistryEntry | null;
+  activeRegistryMode: 'builtin' | 'custom';
   lastError: string | null;
 }
 
@@ -166,6 +207,8 @@ export class DeploymentService {
         verificationNotes: []
       },
       isCommittedToConfig: false,
+      customRegistryEntry: null,
+      activeRegistryMode: 'builtin',
       lastError: null
     };
   }
@@ -563,8 +606,140 @@ export class DeploymentService {
     CONTRACT_REGISTRY.nexusReceipt.isDeployed = true;
     CONTRACT_REGISTRY.nexusReceipt.statusText = 'Verified Testnet Deployment';
 
-    this.updateState({ isCommittedToConfig: true });
+    this.updateState({
+      isCommittedToConfig: true,
+      activeRegistryMode: 'custom',
+      customRegistryEntry: {
+        arch: 'archB',
+        wpotAddress: this.state.wpot.deployedAddress,
+        pusdcAddress: this.state.testUSDC.deployedAddress || '',
+        ammAddress: this.state.nexusAMM.deployedAddress || '',
+        receiptAddress: this.state.nexusReceipt.deployedAddress,
+        txHash: this.state.nexusAMM.txHash,
+        blockNumber: this.state.nexusAMM.blockNumber,
+        activatedAt: Date.now()
+      }
+    });
     return true;
+  }
+
+  /**
+   * Explicitly activates Architecture A contracts after strict receipt and bytecode verification (SEC-03).
+   * Validates deployed addresses, chain ID 420420777, and verifies on-chain code via eth_getCode.
+   */
+  public async activateCustomArchA(params: {
+    pusdcAddress: string;
+    ammAddress: string;
+    pusdcTxHash?: string | null;
+    ammTxHash?: string | null;
+    blockNumber?: number | null;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { pusdcAddress, ammAddress, pusdcTxHash, ammTxHash, blockNumber } = params;
+
+    if (!isAddress(pusdcAddress)) {
+      return { success: false, error: `Invalid pUSDC address: "${pusdcAddress}". Must be a valid 20-byte 0x address.` };
+    }
+    if (!isAddress(ammAddress)) {
+      return { success: false, error: `Invalid AMM address: "${ammAddress}". Must be a valid 20-byte 0x address.` };
+    }
+
+    // Verify connected chain ID
+    try {
+      const chainRes = await this.evmRpc.query('eth_chainId');
+      const chainId = parseInt(chainRes?.result || '0', 16);
+      if (chainId !== PORTALDOT_CHAIN_ID_DEC) {
+        return { success: false, error: `Chain mismatch: active network is ${chainId}, required Portaldot V3 (${PORTALDOT_CHAIN_ID_DEC}).` };
+      }
+    } catch (err: any) {
+      return { success: false, error: `Failed to verify chain ID: ${err?.message}` };
+    }
+
+    // Verify on-chain bytecode for both deployed contracts
+    try {
+      const [usdcCodeRes, ammCodeRes] = await Promise.all([
+        this.evmRpc.query('eth_getCode', [pusdcAddress, 'latest']),
+        this.evmRpc.query('eth_getCode', [ammAddress, 'latest'])
+      ]);
+
+      const usdcCode = usdcCodeRes?.result;
+      if (!usdcCode || usdcCode === '0x' || usdcCode === '0x0') {
+        return { success: false, error: `Verification failed: No deployed bytecode found on-chain at pUSDC address (${pusdcAddress}).` };
+      }
+
+      const ammCode = ammCodeRes?.result;
+      if (!ammCode || ammCode === '0x' || ammCode === '0x0') {
+        return { success: false, error: `Verification failed: No deployed bytecode found on-chain at AMM address (${ammAddress}).` };
+      }
+    } catch (err: any) {
+      return { success: false, error: `Bytecode verification error: ${err?.message}` };
+    }
+
+    const entry: CustomRegistryEntry = {
+      arch: 'archA',
+      pusdcAddress,
+      ammAddress,
+      receiptAddress: ammAddress,
+      txHash: ammTxHash || pusdcTxHash || null,
+      blockNumber: blockNumber || null,
+      activatedAt: Date.now()
+    };
+
+    // Update active CONTRACT_REGISTRY entries (while preserving BUILTIN_DEPLOYMENT)
+    CONTRACT_REGISTRY.testUSDC.deployedAddress = pusdcAddress;
+    CONTRACT_REGISTRY.testUSDC.statusText = 'Custom Verified Architecture A Deployment';
+    CONTRACT_REGISTRY.testUSDC.isDeployed = true;
+
+    CONTRACT_REGISTRY.nexusAMM.deployedAddress = ammAddress;
+    CONTRACT_REGISTRY.nexusAMM.statusText = 'Custom Verified Architecture A Deployment';
+    CONTRACT_REGISTRY.nexusAMM.isDeployed = true;
+
+    CONTRACT_REGISTRY.nexusReceipt.deployedAddress = ammAddress;
+    CONTRACT_REGISTRY.nexusReceipt.statusText = 'Custom Verified Architecture A Deployment (Unified AMM Authority)';
+    CONTRACT_REGISTRY.nexusReceipt.isDeployed = true;
+
+    this.updateState({
+      isCommittedToConfig: true,
+      customRegistryEntry: entry,
+      activeRegistryMode: 'custom',
+      step: 'ALL_VERIFIED'
+    });
+
+    return { success: true };
+  }
+
+  /**
+   * Safely deactivates custom registry entries and restores built-in canonical deployment constants (SEC-03).
+   */
+  public deactivateCustomDeployment(): void {
+    CONTRACT_REGISTRY.testUSDC.deployedAddress = BUILTIN_DEPLOYMENT.pusdcAddress;
+    CONTRACT_REGISTRY.testUSDC.statusText = `Verified on Portaldot V3 Testnet (Block #${BUILTIN_DEPLOYMENT.pusdcDeployBlock})`;
+    CONTRACT_REGISTRY.testUSDC.isDeployed = true;
+
+    CONTRACT_REGISTRY.nexusAMM.deployedAddress = BUILTIN_DEPLOYMENT.ammAddress;
+    CONTRACT_REGISTRY.nexusAMM.statusText = `Verified on Portaldot V3 Testnet (Block #${BUILTIN_DEPLOYMENT.ammDeployBlock})`;
+    CONTRACT_REGISTRY.nexusAMM.isDeployed = true;
+
+    CONTRACT_REGISTRY.nexusReceipt.deployedAddress = BUILTIN_DEPLOYMENT.ammAddress;
+    CONTRACT_REGISTRY.nexusReceipt.statusText = 'Verified on Portaldot V3 Testnet (Unified AMM Authority)';
+    CONTRACT_REGISTRY.nexusReceipt.isDeployed = true;
+
+    CONTRACT_REGISTRY.wpot.deployedAddress = null;
+    CONTRACT_REGISTRY.wpot.isDeployed = false;
+    CONTRACT_REGISTRY.wpot.statusText = 'Omitted in Architecture A (Native POT Direct Pair)';
+
+    this.updateState({
+      isCommittedToConfig: false,
+      customRegistryEntry: null,
+      activeRegistryMode: 'builtin'
+    });
+  }
+
+  public getCustomDeployment(): CustomRegistryEntry | null {
+    return this.state.customRegistryEntry ? { ...this.state.customRegistryEntry } : null;
+  }
+
+  public getActiveRegistryMode(): 'builtin' | 'custom' {
+    return this.state.activeRegistryMode;
   }
 
   // --- Read-Only Verification Helpers ---
@@ -716,5 +891,247 @@ export class DeploymentService {
     } catch (err: any) {
       return { success: false, error: err?.message || 'Deployment transaction failed.' };
     }
+  }
+
+  /**
+   * Prepares and validates a Custom Contract Deployment Plan (Stage 3C).
+   * Validates parameters, encodes constructor arguments, checks chain ID & wallet balance,
+   * performs read-only gas estimation, and compiles fee estimates.
+   */
+  public async prepareCustomDeployment(params: {
+    contractName: string;
+    fileName: string;
+    bytecode: string;
+    abi: any[];
+    constructorParams: ConstructorParam[];
+    paramValues: Record<string, any>;
+    compilerVersion?: string;
+    optimizer?: boolean;
+    optimizerRuns?: number;
+    evmVersion?: string;
+  }): Promise<CustomContractDeploymentPlan> {
+    const {
+      contractName,
+      fileName,
+      bytecode,
+      constructorParams,
+      paramValues,
+      compilerVersion = '0.8.24',
+      optimizer = true,
+      optimizerRuns = 200,
+      evmVersion = 'cancun'
+    } = params;
+
+    const walletState = this.evmWallet.getState();
+    const deployerAddress = walletState.address || '';
+    const chainId = walletState.chainId || PORTALDOT_CHAIN_ID_DEC;
+    const isCorrectNetwork = walletState.isCorrectNetwork;
+    const deployerPotBalance = walletState.balancePot;
+
+    const warnings: string[] = [
+      'Pallet-revive requires POT state storage collateral in addition to computation gas fees.',
+      'Computation gas fees are estimated via read-only RPC; actual runtime execution may vary slightly.'
+    ];
+
+    // 1. Check wallet connection
+    if (!walletState.isConnected || !deployerAddress) {
+      return {
+        contractName,
+        fileName,
+        compilerVersion,
+        optimizer,
+        optimizerRuns,
+        evmVersion,
+        deployerAddress: 'Not connected',
+        chainId,
+        isCorrectNetwork: false,
+        constructorParams,
+        paramValues,
+        encodedConstructorArgs: '',
+        creationBytecode: bytecode,
+        bytecodeSizeBytes: (bytecode.startsWith('0x') ? bytecode.slice(2).length : bytecode.length) / 2,
+        estimatedGas: '0',
+        estimatedGasDecimal: '0',
+        gasPriceGwei: '0',
+        estimatedGasFeePot: '0',
+        deployerPotBalance,
+        isSufficientBalance: false,
+        warnings,
+        isValid: false,
+        validationError: 'EVM wallet is not connected. Connect your wallet to review deployment.'
+      };
+    }
+
+    // 2. Check network
+    if (!isCorrectNetwork) {
+      return {
+        contractName,
+        fileName,
+        compilerVersion,
+        optimizer,
+        optimizerRuns,
+        evmVersion,
+        deployerAddress,
+        chainId,
+        isCorrectNetwork: false,
+        constructorParams,
+        paramValues,
+        encodedConstructorArgs: '',
+        creationBytecode: bytecode,
+        bytecodeSizeBytes: (bytecode.startsWith('0x') ? bytecode.slice(2).length : bytecode.length) / 2,
+        estimatedGas: '0',
+        estimatedGasDecimal: '0',
+        gasPriceGwei: '0',
+        estimatedGasFeePot: '0',
+        deployerPotBalance,
+        isSufficientBalance: false,
+        warnings,
+        isValid: false,
+        validationError: `Connected to Chain ID ${chainId}. Please switch your wallet to Portaldot V3 Testnet (${PORTALDOT_CHAIN_ID_DEC}).`
+      };
+    }
+
+    // 3. Encode constructor arguments
+    const encodeRes = encodeConstructorArgs(constructorParams, paramValues);
+    if (!encodeRes.success) {
+      return {
+        contractName,
+        fileName,
+        compilerVersion,
+        optimizer,
+        optimizerRuns,
+        evmVersion,
+        deployerAddress,
+        chainId,
+        isCorrectNetwork,
+        constructorParams,
+        paramValues,
+        encodedConstructorArgs: '',
+        creationBytecode: bytecode,
+        bytecodeSizeBytes: (bytecode.startsWith('0x') ? bytecode.slice(2).length : bytecode.length) / 2,
+        estimatedGas: '0',
+        estimatedGasDecimal: '0',
+        gasPriceGwei: '0',
+        estimatedGasFeePot: '0',
+        deployerPotBalance,
+        isSufficientBalance: false,
+        warnings,
+        isValid: false,
+        validationError: encodeRes.error || 'Failed to encode constructor parameters.'
+      };
+    }
+
+    const cleanBytecode = bytecode.startsWith('0x') ? bytecode : '0x' + bytecode;
+    const cleanArgs = (encodeRes.encodedHex || '').replace(/^0x/, '');
+    const fullCreationData = cleanBytecode + cleanArgs;
+    const bytecodeSizeBytes = (fullCreationData.length - 2) / 2;
+
+    if (bytecodeSizeBytes > 24576) {
+      warnings.push(`Contract bytecode size (${(bytecodeSizeBytes / 1024).toFixed(1)} KB) exceeds the standard EIP-170 24 KB recommendation.`);
+    }
+
+    // 4. Gas & Fee estimation via RPC
+    let estimatedGasHex = '0x55d4a80'; // Fallback ~90M
+    let gasPriceHex = '0x675c'; // Fallback 26,460 wei
+    try {
+      const [gasEstRes, priceRes] = await Promise.all([
+        this.evmRpc.query('eth_estimateGas', [{
+          from: deployerAddress,
+          data: fullCreationData
+        }]).catch(() => null),
+        this.evmRpc.query('eth_gasPrice').catch(() => null)
+      ]);
+
+      if (gasEstRes?.result) {
+        estimatedGasHex = gasEstRes.result;
+      }
+      if (priceRes?.result) {
+        gasPriceHex = priceRes.result;
+      }
+    } catch {
+      // Use standard fallback values if network query hiccups
+    }
+
+    const gasLimitBigInt = BigInt(estimatedGasHex);
+    const gasPriceBigInt = BigInt(gasPriceHex);
+    const gasPriceGwei = (Number(gasPriceBigInt) / 1e9).toFixed(6);
+
+    const feeWei = gasLimitBigInt * gasPriceBigInt;
+    const feePotStr = (Number(feeWei) / 1e18).toFixed(8);
+
+    // 5. Balance check
+    let isSufficientBalance = true;
+    let balanceError: string | undefined;
+    if (deployerPotBalance !== null) {
+      const balanceNum = parseFloat(deployerPotBalance);
+      const feeNum = parseFloat(feePotStr);
+      if (balanceNum < feeNum) {
+        isSufficientBalance = false;
+        balanceError = `Account balance (${balanceNum} POT) is less than the estimated gas fee (${feeNum} POT).`;
+      }
+    }
+
+    return {
+      contractName,
+      fileName,
+      compilerVersion,
+      optimizer,
+      optimizerRuns,
+      evmVersion,
+      deployerAddress,
+      chainId,
+      isCorrectNetwork,
+      constructorParams,
+      paramValues,
+      encodedConstructorArgs: encodeRes.encodedHex || '',
+      creationBytecode: fullCreationData,
+      bytecodeSizeBytes,
+      estimatedGas: estimatedGasHex,
+      estimatedGasDecimal: gasLimitBigInt.toString(),
+      gasPriceGwei,
+      estimatedGasFeePot: feePotStr,
+      deployerPotBalance,
+      isSufficientBalance,
+      warnings,
+      isValid: isSufficientBalance,
+      validationError: balanceError
+    };
+  }
+
+  /**
+   * Verifies a completed custom deployment on-chain by tracking receipt and deployed bytecode.
+   */
+  public async verifyCustomDeployment(txHash: string): Promise<{
+    success: boolean;
+    txHash: string;
+    contractAddress?: string;
+    blockNumber?: number;
+    gasUsed?: string;
+    explorerUrl?: string;
+    error?: string;
+  }> {
+    const receipt = await this.pollReceipt(txHash);
+    if (!receipt) {
+      return { success: false, txHash, error: 'Transaction receipt polling timed out. Contract may still be pending inclusion.' };
+    }
+    if (receipt.status !== '0x1' && receipt.status !== '1') {
+      return { success: false, txHash, error: 'Deployment transaction reverted on-chain.' };
+    }
+    const contractAddress = receipt.contractAddress;
+    if (!contractAddress) {
+      return { success: false, txHash, error: 'Transaction receipt did not return a contractAddress.' };
+    }
+    const codeRes = await this.evmRpc.query('eth_getCode', [contractAddress, 'latest']);
+    if (!codeRes?.result || codeRes.result === '0x' || codeRes.result === '0x0') {
+      return { success: false, txHash, contractAddress, error: 'Verified contract address contains empty bytecode on-chain.' };
+    }
+    return {
+      success: true,
+      txHash,
+      contractAddress,
+      blockNumber: parseInt(receipt.blockNumber, 16),
+      gasUsed: parseInt(receipt.gasUsed, 16).toString(),
+      explorerUrl: `${PORTALDOT_EXPLORER_URL}address/${contractAddress}`
+    };
   }
 }

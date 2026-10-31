@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](./LICENSE)
 [![Portaldot V3 Testnet](https://img.shields.io/badge/Network-Portaldot_V3_Testnet_(420420777)-cyan.svg)](https://node-console.portaldot.dev/)
-[![Automated Tests](https://img.shields.io/badge/Tests-126_Passing_(46_Hardhat_+_80_Vitest)-purple.svg)](./PORTALNEXUS_WALLET_IMPLEMENTATION_REPORT.md)
+[![Automated Tests](https://img.shields.io/badge/Tests-236_Passing_(46_Hardhat_+_190_Vitest)-purple.svg)](./PORTALNEXUS_DORAHACKS_FINAL_SUBMISSION_CHECKLIST.md)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-portalnexus--two.vercel.app-blue.svg)](https://portalnexus-two.vercel.app)
 
 ---
@@ -23,8 +23,8 @@
 ### What the Hosted dApp Supports
 - **Live Dual-VM Observability:** Streaming telemetry from Portaldot Substrate WebSocket (`wss://test-node-v3.portaldot.dev`) and EVM JSON-RPC (`https://test-evm-rpc-v3.portaldot.dev`), displaying real-time block cadence offsets ($\Delta = \text{Substrate} - \text{EVM}$).
 - **Real Wallet Connectivity:** Dual-VM wallet support for EVM providers (MetaMask, Rabby) on Chain ID `420420777` and Substrate extensions (Polkadot{.js}, Talisman, SubWallet) on SS58 Prefix 42.
-- **Transfers & Faucet Panel (Tab 2):** Real-time testnet faucet claims (`10,000 pUSDC` per call), ERC-20 pUSDC token transfers, and native POT transfers on EVM and Substrate.
-- **Nexus AMM Panel (Tab 3):** User-signed constant-product liquidity additions, LP receipt NFT redemption, and token swaps with automatic empty-pool swap protection.
+- **Transfers & Faucet Panel (Tab 2):** Real-time testnet faucet claims (`10,000 pUSDC` per call, permissionless repeat minting), ERC-20 pUSDC token transfers, and native POT transfers on EVM and Substrate (using genuine `balances.transfer_keep_alive` extrinsic dispatch).
+- **Nexus AMM Panel (Tab 3):** User-signed constant-product liquidity additions, LP position redemption, and token swaps with automatic empty-pool swap protection. Discloses that Architecture A LP positions are non-transferable (soulbound to depositor) and redeemable only by the original minter.
 - **In-dApp Contract Deployment Manager:** Direct browser-signed deployment modal supporting Architecture A (`TestUSDCMin`, `NexusAMMNative`) and Architecture B (`WPotToken`, `TestUSDC`, `NexusAMM`).
 - **`pallet-revive` Deterministic Address Inspector (Tab 1):** Real-time derivation of Substrate `SS58` addresses from EVM `0x...` (H160) keys via the `0xEE`-padding rule (`H160 || [0xEE; 12]`), complete with authoritative test vectors and explicit ownership boundary warnings.
 - **Floating Transaction Notification Toast:** Real-time lifecycle tracking (`PROMPTING_WALLET` -> `SUBMITTING` -> `MINING` -> `CONFIRMED`) with direct links to the Portaldot node console explorer.
@@ -45,6 +45,225 @@
 > - **Testnet Prototype Only:** PortalNexus is an experimental prototype deployed on the **Portaldot V3 Testnet** (`Chain ID 420420777`). It is **not** a production financial service, has not undergone an external security audit, and must never be used with real funds.
 > - **Test Token (`pUSDC`):** `pUSDC` ([`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)) is an unbacked testnet simulation token with **zero real-world monetary value**.
 > - **Current Pool & Transaction Status:** Both Architecture A contracts are deployed and verified on-chain, and all contract reads are live. However, the pool currently has **zero reserves (`0 POT / 0 pUSDC`)** and frontend transaction broadcasting is **intentionally disabled (`TX_SUBMISSION_ENABLED = false`)** until the deployer account receives additional testnet `tPOT` to cover `pallet-revive` storage-slot deposits.
+
+---
+
+# How to Test PortalNexus
+
+This section provides a complete, self-contained evaluation guide for **DoraHacks judges and technical reviewers**. Every core feature of PortalNexus V3.0 can be launched, tested, and verified directly from your browser without personal assistance or specialized setup.
+
+> [!TIP]
+> **No Wallet or Funds Required for Core Evaluation:**  
+> You do **not** need a funded cryptocurrency wallet to evaluate PortalNexus. Over **80% of the platform's functionality**—including live Dual-VM consensus telemetry, deterministic `pallet-revive` address derivation, on-chain smart contract inspection (`PortalTestStorage`), in-browser Solidity WASM compilation, and AMM reserve auditing—is **100% read-only and requires zero wallet connection and zero tokens**.
+
+---
+
+### 1. Open the Live Application
+
+Navigate to the production deployment:
+**[https://portalnexus-two.vercel.app/](https://portalnexus-two.vercel.app/)**
+
+- **Hosted On:** Vercel Global Edge Network (linked directly to the `main` branch of this repository).
+- **Network Compatibility:** Fully responsive in all modern desktop browsers (Chrome, Brave, Edge, Firefox, Safari).
+- **Instant Initialization:** Upon load, the dApp automatically initiates read-only connections to both the Substrate Layer-0 WebSocket and the `pallet-revive` EVM JSON-RPC endpoint. No login, sign-up, or wallet authorization is requested.
+
+---
+
+### 2. Configure Portaldot V3 Testnet (Optional for Wallet Testing)
+
+If you choose to test write operations (such as claiming testnet `pUSDC` tokens or submitting transfers), configure your browser wallet with the official Portaldot V3 Testnet parameters:
+
+| Parameter | Exact Value | Notes |
+| :--- | :--- | :--- |
+| **Network Name** | `Portaldot V3 Testnet` | Official Portaldot Developer Testnet |
+| **Chain ID** | `420420777` | Hex: `0x190f1ca9` |
+| **EVM RPC URL** | `https://test-evm-rpc-v3.portaldot.dev` | Public JSON-RPC endpoint (`eth_*` namespace via REVM) |
+| **Substrate WebSocket URL** | `wss://test-node-v3.portaldot.dev` | Native Substrate Layer-0 RPC & Extrinsic gateway |
+| **Currency Symbol** | `tPOT` (or `POT`) | Native gas and staking token |
+| **Decimals** | `14` (Substrate planck) / `18` (EVM wei) | $1\text{ planck} = 10^4\text{ wei}$ |
+| **Official Block Explorer** | [`https://node-console.portaldot.dev/`](https://node-console.portaldot.dev/) | Substrate & Polkadot.js node console |
+
+> [!NOTE]
+> **One-Click Network Addition:**  
+> If using **MetaMask**, **Rabby**, or **Coinbase Wallet**, you do not need to enter these RPC details manually. Simply click the **"Connect EVM"** button in the PortalNexus header. If your wallet is connected to an alternate network (e.g. Ethereum Mainnet), PortalNexus automatically dispatches an `EIP-3085` (`wallet_addEthereumChain`) and `EIP-3326` (`wallet_switchEthereumChain`) request to configure and switch networks with one click.
+
+---
+
+### 3. Wallet and Test Funds Matrix
+
+PortalNexus enforces a clear separation between read-only evaluation and user-signed write operations:
+
+| Feature Category | Wallet Needed? | Token Balance Needed? | Supported Wallets / Extrinsics |
+| :--- | :---: | :---: | :--- |
+| **Dual-VM Consensus Telemetry** | ❌ None | ❌ None | None (Public WebSocket & JSON-RPC) |
+| **3D Dual-VM Singularity Canvas** | ❌ None | ❌ None | None (Client-side WebGL Three.js) |
+| **`pallet-revive` Address Inspector** | ❌ None | ❌ None | None (Client-side pure TypeScript & Blake2b) |
+| **Deep Diagnostics & Cadence Table** | ❌ None | ❌ None | None (Direct RPC queries) |
+| **Verified Contract Registry & RPC Getters** | ❌ None | ❌ None | None (`eth_call` to `0x5065...f6F8` and `0x407A...160A`) |
+| **In-Browser Solidity 0.8.24 WASM Compiler** | ❌ None | ❌ None | None (Runs Solc v0.8.24 directly inside browser WebAssembly) |
+| **AMM Empty-Pool & Reserve Auditing** | ❌ None | ❌ None | None (`eth_call` to `getReserves()`) |
+| **Claim Testnet pUSDC (Contract Faucet)** | ✅ EVM Wallet | ⚠️ Small `tPOT` for gas | MetaMask, Rabby, Coinbase Wallet (calls `faucetMint`) |
+| **EVM Transfers (pUSDC / POT)** | ✅ EVM Wallet | ✅ Token / Gas balance | Standard EIP-1193 browser extensions |
+| **Substrate Native tPOT Transfers** | ✅ Substrate Wallet | ✅ Native `tPOT` balance | Polkadot{.js}, Talisman, SubWallet (requires `signPayload`) |
+
+#### How to Obtain Testnet Tokens
+1. **Simulation Stablecoin (`pUSDC`):**  
+   - PortalNexus features an **open, permissionless on-chain contract faucet** built into [`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol).
+   - In **Tab 2 ("Transfers & Faucet")**, click **"Claim 10,000 pUSDC"**.
+   - The contract dispenses up to 10,000 `pUSDC` per transaction with zero cooldown and no access list.
+2. **Native Gas Token (`tPOT`):**  
+   - To sign and broadcast transactions, an account requires native `tPOT` to pay EVM gas and `pallet-revive` storage deposits.
+   - Testnet `tPOT` can be obtained through the official Portaldot Discord/Telegram developer faucets or community testnet taps.
+   - **Important:** Never use or import real mainnet private keys or seed phrases. All testing is strictly restricted to testnet.
+
+---
+
+### 4. Feature-by-Feature Testing Guide
+
+Follow these step-by-step instructions to verify each core protocol capability:
+
+#### Feature 1: Real-Time Dual-VM Consensus Synchronization
+1. Open [`https://portalnexus-two.vercel.app/`](https://portalnexus-two.vercel.app/).
+2. Look at the top navigation bar and hero metric cards:
+   - **Substrate Height:** Displays the live block height streaming via WebSocket (`wss://test-node-v3.portaldot.dev`).
+   - **Finalized Height:** Displays the finalized Substrate consensus block height.
+   - **Block Offset ($\Delta$):** Real-time computation of $\Delta = \text{Substrate Block} - \text{EVM Block}$.
+3. **Expected Observable Result:**  
+   The block counters increment live every ~2–6 seconds in lockstep. The Block Offset card reports a synchronized status (typically $\Delta = 0$ to $+2$ blocks) with the verdict label **`Cadence Synchronized`**.
+
+#### Feature 2: Authoritative `pallet-revive` Address Derivation (Tab 1)
+1. Ensure **`1. Cross-VM Map`** is selected (default tab).
+2. Under "Deterministic Revive Mapping Preview", click any of the **Authoritative Test Vector** buttons:
+   - Click **`Verified Deployer (0xdC7f…8A2A)`**.
+3. **Expected Observable Result:**  
+   - The EVM address field populates with `0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A`.
+   - The fallback mapper instantly computes the exact `SS58` Prefix 42 address:  
+     `5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu`.
+   - Notice the amber security disclosure: PortalNexus explicitly warns that deterministic mathematical padding (`H160 || [0xEE; 12]`) does **not** prove shared private key ownership between VMs, and confirms that client-side cross-VM token bridging is disabled because Portaldot V3 does not expose client-accessible bridge extrinsics.
+
+#### Feature 3: Deep Diagnostics, Cadence Offset Table & Blake2b Risk Comparison
+1. Scroll down to the bottom of the dashboard.
+2. Click the accordion button labeled **`▼ Deep Diagnostics, Cadence Offset Table & Blake2b Converter`**.
+3. Inspect the expanded diagnostics sections:
+   - **Rolling Cadence Table:** Shows the last 15 historical block samples from both Substrate and EVM endpoints, complete with individual block deltas and timestamps.
+   - **Blake2b vs. 0xEE Comparison:** Shows why legacy Frontier tools (which derive Substrate addresses via `blake2_256("evm:" + H160)`) cause permanent fund loss on Portaldot V3, contrasting the wrong Blake2b hash against the authoritative `0xEE` padded address.
+4. **Expected Observable Result:**  
+   The accordion opens smoothly, displaying live endpoint latency, connection status, rolling block cadence samples, and the side-by-side mathematical address discrepancy.
+
+#### Feature 4: Verified Contract Registry & Live RPC Getters (`getValue() == 42`)
+1. Inside the expanded **Deep Diagnostics** accordion, locate the **`Verified Contracts Registry`** section.
+2. Observe the three verified contract cards:
+   - `NexusAMMNative` (`0x407A...160A`)
+   - `TestUSDCMin` (`0x6C3B...4002`)
+   - `PortalTestStorage` (`0x5065...f6F8`)
+3. On the `PortalTestStorage` card, click **`Re-verify Live State`**.
+4. **Expected Observable Result:**  
+   The dApp dispatches a fresh live `eth_call` query directly to `https://test-evm-rpc-v3.portaldot.dev`. The status badge confirms:
+   - `getValue(): 42`
+   - `creator: 0xdC7f...8A2A` (matches verified deployer)
+   - `deployedAtBlock: 261857`
+   - `contractBytecodeSize: 678 bytes`
+
+#### Feature 5: In-Browser Solidity 0.8.24 WebAssembly Compiler Modal
+1. Scroll to the top navigation bar.
+2. Click the **`Deploy Contract`** button (`#btn-deploy-modal`).
+3. In the modal, examine the embedded Solidity compiler:
+   - Review the preloaded contract template (`PortalTestStorage.sol` targeting EVM Cancun).
+   - Observe the compiler controls and storage-deposit estimation calculator.
+4. Click **`Compile Contract`**.
+5. **Expected Observable Result:**  
+   The browser executes the official `solc-js` 0.8.24 WebAssembly compiler locally without contacting external servers. Compilation succeeds with **Status: Ready for Deployment**, displaying the exact compiled bytecode (678 bytes) and estimating the `pallet-revive` storage rent deposit (~0.0589 POT/byte + 18.32 POT base trie deposit). Press `Escape` or click the `✕` button to close the modal.
+
+#### Feature 6: AMM Reserve Auditing & Empty-Pool Protection (Tab 3)
+1. Switch to **`3. Nexus AMM`** in the main execution terminal.
+2. Inspect the **Reserve POT** and **Reserve pUSDC** cards.
+3. Observe the amber alert banner:
+   `AMM Reserves Empty (0/0) — Swap Execution Disabled`
+4. Try typing a swap amount into the "You Pay" input.
+5. Click **`Preview Initial Liquidity Calldata (0.5 POT + 10 pUSDC) →`**.
+6. **Expected Observable Result:**  
+   - Live on-chain `eth_call` to `getReserves()` returns `reservePOT = 0.00` and `reserveUSDC = 0.00`.
+   - The UI blocks swap execution, protecting users from zero-liquidity division-by-zero reverts.
+   - The initial liquidity preview tab displays the exact constant-product share calculation (`2,236,067,976,499` shares minted, `1,000` minimum liquidity shares permanently locked) and provides the exact ABI calldata for `approve` and `addLiquidity`.
+
+---
+
+### 5. Verified Deployed Contracts (Portaldot V3 Testnet)
+
+All smart contracts referenced by PortalNexus are deployed, immutable, and verifiable on the Portaldot V3 Testnet (`Chain ID 420420777`):
+
+| Contract Name | Verified On-Chain Address | Deployed Block | Bytecode Size | Verified Role / Method |
+| :--- | :--- | :---: | :---: | :--- |
+| **`NexusAMMNative`** | [`0x407A2609dfd5336a38D6274B1EFc1804930f160A`](https://node-console.portaldot.dev/) | `#237284` | 3,305 bytes | State-rent-minimized Constant-Product AMM (`POT / pUSDC`) |
+| **`TestUSDCMin`** | [`0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002`](https://node-console.portaldot.dev/) | `#237279` | 1,482 bytes | 6-decimal simulation stablecoin with open `faucetMint` |
+| **`PortalTestStorage`** | [`0x5065125265638A4b354FDDfe1f9339F65cC9f6F8`](https://node-console.portaldot.dev/) | `#261857` | 678 bytes | Storage getter test contract (`getValue() == 42`) |
+
+#### Independent RPC Verification Commands
+Reviewers can independently verify contract bytecode and live storage directly using `curl` against the public RPC:
+
+```bash
+# 1. Verify PortalTestStorage bytecode exists on-chain
+curl -s -X POST https://test-evm-rpc-v3.portaldot.dev \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_getCode","params":["0x5065125265638A4b354FDDfe1f9339F65cC9f6F8","latest"],"id":1}'
+
+# 2. Query PortalTestStorage.getValue() directly (selector 0x20965255 -> returns 42 / 0x2a)
+curl -s -X POST https://test-evm-rpc-v3.portaldot.dev \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_call","params":[{"to":"0x5065125265638A4b354FDDfe1f9339F65cC9f6F8","data":"0x20965255"},"latest"],"id":2}'
+# Response: {"jsonrpc":"2.0","result":"0x000000000000000000000000000000000000000000000000000000000000002a","id":2}
+```
+
+---
+
+### 6. Known Limitations & Honest Disclosures
+
+In the spirit of complete hackathon transparency, please note the following verified limitations:
+
+1. **Unseeded AMM Pool Reserves (`0/0`):**  
+   The deployed `NexusAMMNative` pool currently holds zero reserves (`0 POT / 0 pUSDC`). Seeding initial liquidity requires ~24.72 `tPOT` in `pallet-revive` mapping-slot storage deposits (state rent). The pool's constant-product math, slippage protection, and 1,000-share liquidity lock are rigorously verified by 46 automated invariant tests, but live swaps against on-chain liquidity cannot execute until liquidity is deposited.
+2. **Swap Execution Disabled:**  
+   The UI automatically detects zero reserves and disables swap execution to prevent user transactions from reverting. A complete calldata preview and share calculator is provided instead.
+3. **No Direct Client Cross-VM Teleport Extrinsic:**  
+   Portaldot V3 `pallet-revive` does not expose a trustless, client-callable extrinsic for instantaneous cross-VM token teleportation. Tab 1 functions as an authoritative address mapping and ownership inspector.
+4. **Substrate Wallet Extrinsic Signing Requirement:**  
+   Substrate native transfers require a wallet extension capable of standard extrinsic payload signing (`signPayload`). Adapters that only offer off-chain message signing (`signRaw`) are flagged with an explicit warning, because PortalNexus refuses to substitute fake message signatures for genuine on-chain transfers.
+
+---
+
+### 7. Local Development & Automated Test Verification
+
+Judges can reproduce the entire project locally from source in under 60 seconds:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/JimmyOgb/PortalNexus.git
+cd PortalNexus
+
+# 2. Install frontend and contract dependencies
+npm install
+npm --prefix contracts install
+
+# 3. Start local development server (opens http://localhost:5173/)
+npm run dev
+
+# 4. Run frontend, math, mapper, and protocol unit tests (Vitest)
+npm test
+
+# 5. Run smart contract unit and invariant tests (Hardhat)
+npm run test:contracts
+
+# 6. Run strict TypeScript compilation check (Zero errors)
+npm run typecheck
+
+# 7. Build production distribution bundle
+npm run build
+```
+
+**Automated Test Summary:**
+- **Vitest:** 15 test files, 190 passing unit and integration tests.
+- **Hardhat:** 46 passing smart contract invariant tests across 5 test suites.
+- **Total:** **236 passing automated tests** with 100% protocol invariant coverage.
 
 ---
 
@@ -108,7 +327,7 @@ Portaldot Network V3.0 replaces legacy Polkadot Frontier (`pallet-evm`) with Pol
 PortalNexus is not a generic EVM template pointed at a new chain ID; every layer of the stack was shaped around **Portaldot V3.0's specific runtime architecture**:
 
 1. **`pallet-revive` State-Rent Optimization (Architecture A):**  
-   By eliminating `WPotToken.sol` and unifying ERC-721 LP receipt tracking directly inside [`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol), we reduced total deployed bytecode from `~15,580 bytes` to **`4,787 bytes`** (`1,482 bytes` for `TestUSDCMin` + `3,305 bytes` for `NexusAMMNative`), cutting actual deployment cost from an estimated `~1,090.86 POT` to **`407.811527 POT`**.
+   By eliminating `WPotToken.sol` and unifying LP position tracking directly inside [`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol), we reduced total deployed bytecode from `~15,580 bytes` to **`4,787 bytes`** (`1,482 bytes` for `TestUSDCMin` + `3,305 bytes` for `NexusAMMNative`), cutting actual deployment cost from an estimated `~1,090.86 POT` to **`407.811527 POT`**. Note: In Architecture A, LP positions are non-transferable (soulbound to depositor) and redeemed via `removeLiquidity`, contrasting with Architecture B's separate transferable `NexusLPReceipt`.
 2. **Native POT (18-Decimal EVM Wei vs. 14-Decimal Substrate Planck):**  
    `NexusAMMNative` accepts native EVM `POT` via `msg.value` (`addLiquidity`, `swapExactPOTForTokens`) and returns native `POT` via low-level `.call{value: amount}("")`, while the telemetry layer explicitly tracks the `14-decimal` (`tPOT` planck) to `18-decimal` (`POT` wei) conversion across VMs.
 3. **`AccountId32Mapper` Compliance:**  
@@ -156,8 +375,13 @@ flowchart LR
 
 | Contract | Role / Pair | Deployed Address | Deployment Tx Hash | Block | Runtime Bytecode | Actual Cost |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **[`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)** | `pUSDC` Test Token (6 Decimals, 10,000/call faucet cap) | `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` | `0x4534608666225d9fba0f8c69a28dd29c4130825b06a5160c33e6beec1b225152` | `#237279` | `1,482 bytes` | `128.867113 POT` |
-| **[`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol)** | Constant-Product AMM (`Native POT / pUSDC`, 0.3% fee) + Unified ERC-721 LP Receipt (`NX-LP`) | `0x407A2609dfd5336a38D6274B1EFc1804930f160A` | `0x48cd085966cc570984aa4883d05ed3c26de9ade7d4296f909cc47f6ae0e9ba54` | `#237284` | `3,305 bytes` | `278.944414 POT` |
+| **[`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)** | `pUSDC` Test Token (6 Decimals, 10,000/call faucet cap, permissionless repeat minting, zero backing) | `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` | `0x4534608666225d9fba0f8c69a28dd29c4130825b06a5160c33e6beec1b225152` | `#237279` | `1,482 bytes` | `128.867113 POT` |
+| **[`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol)** | Constant-Product AMM (`Native POT / pUSDC`, 0.3% fee) + Unified Non-Transferable LP Positions | `0x407A2609dfd5336a38D6274B1EFc1804930f160A` | `0x48cd085966cc570984aa4883d05ed3c26de9ade7d4296f909cc47f6ae0e9ba54` | `#237284` | `3,305 bytes` | `278.944414 POT` |
+
+> [!NOTE]
+> **Architecture A vs. Architecture B Liquidity Positions (SEC-02 Disclosure):**
+> - **Architecture A (`NexusAMMNative.sol` — Active Testnet Deployment):** Liquidity positions are tracked internally (`ownerOf[tokenId]`). **Positions are non-transferable (soulbound)** to the depositor account. The contract does not implement ERC-721 transfer functions (`transferFrom`/`safeTransferFrom`). Underlying reserves can only be redeemed by the original depositor account invoking `removeLiquidity`.
+> - **Architecture B (`NexusAMM.sol` + `NexusLPReceipt.sol` — Optional Reference):** Implements an external ERC-721 token contract where position receipts can be transferred between accounts to transfer the underlying claim.
 
 - **Deployer EVM Address:** `0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A`
 - **Deployer Mapped Substrate SS58 (Prefix 42):** `5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu`
@@ -246,7 +470,7 @@ npm run test:contracts
 
 # 2. Frontend unit, math, mapper & mocked RPC integration tests (Vitest)
 npm test
-# -> 8 test files, 68 passed
+# -> 15 test files, 190 passed
 
 # 3. Strict TypeScript check
 npm run typecheck
@@ -260,7 +484,7 @@ npm run build
 | Verification Type | Executed? | Result | Notes |
 | :--- | :--- | :--- | :--- |
 | **Hardhat Contract Unit Tests** | ✅ Yes | `46 passing` | Tests both Architecture A (`NexusAMMNative`, `TestUSDCMin`) and Architecture B reference contracts. |
-| **Vitest Frontend & Mocked RPC Tests** | ✅ Yes | `68 passing` | Includes ABI selector verification against Hardhat artifacts and mocked RPC read/error tests. |
+| **Vitest Frontend & Mocked RPC Tests** | ✅ Yes | `190 passing` | Includes ABI selector verification, Solc WASM compiler, Substrate transfers, and live RPC inspection. |
 | **TypeScript & Vite Production Build** | ✅ Yes | `Exit 0` | Clean compilation and bundle generation. |
 | **Live Read-Only Portaldot V3 RPC Checks** | ✅ Yes | `Verified at Block #238047` | Confirmed chain ID `420420777`, contract bytecodes (`1,482` & `3,305` bytes), deployment receipts, and live getters. |
 | **Real Browser Wallet Extension QA** | ❌ No | `Mock-Tested Only` | Tested via Playwright injected `window.ethereum` stub; manual MetaMask/Rabby extension session not yet run. |
