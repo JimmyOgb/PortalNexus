@@ -1,5 +1,9 @@
 # PortalNexus — Testing, On-Chain Evidence & Verification Matrix
 
+# Testing and Evidence — Historical Snapshot Notice
+
+> This file contains earlier testnet observations and estimates. Its balance, storage-deposit, and fee figures are historical, not a current cost plan. Current V2 reserves and balances require fresh read-only RPC checks. The application faucet and AMM submission controls remain disabled, and the existing 20 tPOT aggregate AMM cap must not be exceeded.
+
 This document strictly separates **local unit tests**, **mocked frontend tests**, **build/type-check verification**, **live read-only chain verification**, **wallet connection testing**, and **on-chain transaction testing**.
 
 ---
@@ -13,7 +17,7 @@ This document strictly separates **local unit tests**, **mocked frontend tests**
 | **3. TypeScript & Production Bundle** | ✅ **EXECUTED** | `npm run typecheck` & `npm run build` | **Exit 0** (`0` errors) | Strict TypeScript type safety across all `.ts`/`.tsx` files and clean Vite production asset bundling. | Does not test runtime network availability. |
 | **4. Live Read-Only Portaldot V3 RPC Checks** | ✅ **EXECUTED** | Direct JSON-RPC & Headless Chromium against `https://test-evm-rpc-v3.portaldot.dev` | **Verified at Block `#237615` & `#238047`** | Chain ID `420420777`, deployed bytecode sizes (`1,482` and `3,305` bytes), deployment transaction receipts (`status: 0x1`), live getters (`getReserves() = (0,0)`, `usdc()`, `receiptContract()`, `decimals() = 6`, `totalSupply() = 0`), and live deployer balance (`13.088472 POT`). | Read-only calls only; no state-changing transactions sent. |
 | **5. Real Browser Wallet Extension Connection** | ⚠️ **UNTESTED (Mocked Only)** | Playwright injected `window.ethereum` stub | **Simulated Only** | Connected, wrong-network (`Chain ID 1`), and user-rejection (`4001`) UI flows work against a stub provider. | A live human session with an installed MetaMask/Rabby/Polkadot.js browser extension has **not** been manually executed in this environment. |
-| **6. Live End-to-End Write Transactions (Faucet / Approve / Add / Swap / Remove)** | 🛑 **NOT EXECUTED (Disabled by Safety Gate)** | `TX_SUBMISSION_ENABLED = false` | **Not Broadcast** | Live `eth_estimateGas` proved `faucetMint` requires `~7.82 POT` and `approve` requires `~3.92 POT` in `pallet-revive` state deposits. | Actual post-deployment state writes have not been broadcast because cumulative state rent (~25–35 POT) exceeds the deployer's remaining `13.088472 POT`. |
+| **6. Live End-to-End Write Transactions (Faucet / Approve / Add / Swap / Remove)** | 🛑 **NOT EXECUTED (Disabled by Safety Gate)** | `TX_SUBMISSION_ENABLED = false` | **Not Broadcast** | Historical faucet/approval estimates were observed on an earlier runtime state; they are not a current fee bound and do not account for the complete V2 sequence. | No write has been executed for the proposed sequence. Current spendable balance and complete-sequence cost must be freshly verified; the 20 tPOT aggregate authorization remains binding. |
 
 ---
 
@@ -61,8 +65,8 @@ Queried directly from `https://test-evm-rpc-v3.portaldot.dev` on `2026-10-29`:
 | `eth_getCode` | `0x407A2609dfd5336a38D6274B1EFc1804930f160A` | `3,305 bytes` | Matches `deployment-receipt-arch-a.json` |
 | `NexusAMMNative.usdc()` | `0x407A...160A` (`0x3e413bee`) | `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` | Verified immutable token link |
 | `NexusAMMNative.receiptContract()` | `0x407A...160A` (`0xd435b3a3`) | `0x407A2609dfd5336a38D6274B1EFc1804930f160A` | Verified unified receipt authority |
-| `NexusAMMNative.getReserves()` | `0x407A...160A` (`0x0902f1ac`) | `reservePOT = 0`, `reserveUSDC = 0` | Pool is unseeded (empty) |
-| `NexusAMMNative.totalLiquidityShares()` | `0x407A...160A` (`0x87cd5b20`) | `0` | No LP positions minted yet |
+| `NexusAMMNative.getReserves()` (historical V1 read) | `0x407A...160A` (`0x0902f1ac`) | `reservePOT = 0`, `reserveUSDC = 0` at the recorded audit block | Historical observation only; does not establish current V1 or V2 pool state |
+| `NexusAMMNative.totalLiquidityShares()` (historical V1 read) | `0x407A...160A` (`0x87cd5b20`) | `0` at the recorded audit block | Historical observation only; does not establish current LP state |
 | `TestUSDCMin.name()` / `symbol()` / `decimals()` | `0x6C3B...4002` | `"Portal Test USD"` / `"pUSDC"` / `6` | Matches contract source |
-| `TestUSDCMin.totalSupply()` | `0x6C3B...4002` (`0x18160ddd`) | `0` | No faucet mints executed yet |
-| `eth_getBalance(deployer)` | `0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A` | `13,088,472,552,168,753,000 wei` (`13.088472 POT`) | Matches post-deployment receipt |
+| `TestUSDCMin.totalSupply()` (historical read) | `0x6C3B...4002` (`0x18160ddd`) | `0` at the recorded audit block | Historical observation only; not a current supply claim |
+| `eth_getBalance(deployer)` (historical read) | `0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A` | `13,088,472,552,168,753,000 wei` (`13.088472 POT`) at the recorded audit block | Historical observation only; not a current wallet balance claim |

@@ -97,7 +97,7 @@ describe('TransactionService — User-Approved Transaction Manager', () => {
     expect(txService.getHistory().length).toBe(1);
     expect(txService.getHistory()[0].txHash).toBe(dummyTxHash);
     expect(statesRecorded).toContain('PROMPTING_WALLET');
-    expect(statesRecorded).toContain('SUBMITTING');
+    expect(statesRecorded).toContain('SUBMITTED');
     expect(statesRecorded).toContain('MINING');
   });
 

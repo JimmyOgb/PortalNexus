@@ -224,10 +224,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
 
       {/* Ambient Vignette Overlay */}
       <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background: 'radial-gradient(circle at center, transparent 15%, #030712 95%)'
-        }}
+        className="ambient-vignette fixed inset-0 pointer-events-none z-0"
       />
 
       {/* Main Content Layer */}
@@ -895,13 +892,20 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                 <div>
                   <p className="text-xs font-bold text-white mono uppercase">{recentTx.label}</p>
                   <p className="text-[11px] text-slate-300 mono mt-0.5">
-                    Status:{' '}
+                    Stage:{' '}
                     <span className={
                       recentTx.status === 'CONFIRMED' ? 'text-emerald-400 font-bold' :
                       recentTx.status === 'REVERTED' || recentTx.status === 'ERROR' || recentTx.status === 'REJECTED' ? 'text-rose-400 font-bold' :
                       'text-cyan-300 font-bold'
                     }>
-                      {recentTx.status}
+                      {recentTx.status === 'VALIDATING' ? 'Checking transaction permission' :
+                       recentTx.status === 'PROMPTING_WALLET' ? 'Waiting for wallet confirmation' :
+                       recentTx.status === 'SUBMITTED' ? 'Submitted to network' :
+                       recentTx.status === 'MINING' ? 'Waiting for transaction receipt' :
+                       recentTx.status === 'CONFIRMED' ? 'Receipt verified' :
+                       recentTx.status === 'REVERTED' ? 'Transaction reverted' :
+                       recentTx.status === 'REJECTED' ? 'Wallet request rejected' :
+                       recentTx.status === 'ERROR' ? 'Transaction error' : recentTx.status}
                     </span>
                   </p>
                 </div>

@@ -70,7 +70,7 @@ export const AMM_DEPLOYMENT_STATUS = {
   correctedV2: {
     version: 'NexusAMMNativeV2',
     address: CORRECTED_AMM_V2_DEPLOYMENT.address,
-    status: 'Deployed and independently verified at block #333609; pool is empty.'
+    status: 'Deployed and independently verified at block #333609; current pool state requires a live read.'
   }
 } as const;
 

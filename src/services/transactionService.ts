@@ -4,7 +4,7 @@
  * Coordinates user-approved on-chain transactions on Portaldot V3 Testnet:
  * - Pre-flight verification (network, balance, inputs)
  * - Explicit user wallet prompts (zero automated or silent signing)
- * - Real-time state tracking (Wallet Approval -> Submitting -> Mining -> Confirmed/Reverted)
+ * - Real-time state tracking (permission check -> wallet confirmation -> submitted -> receipt wait -> confirmed/reverted)
  * - Accurate receipt verification via RPC
  * - Duplicate submission prevention
  */
@@ -17,7 +17,7 @@ export type TxLifecycleStatus =
   | 'IDLE'
   | 'VALIDATING'
   | 'PROMPTING_WALLET'
-  | 'SUBMITTING'
+  | 'SUBMITTED'
   | 'MINING'
   | 'CONFIRMED'
   | 'REVERTED'
@@ -118,10 +118,14 @@ export class TransactionService {
         txParams.value = tx.valueHex;
       }
 
-      this.updateActive({ status: 'SUBMITTING' });
       const txHash = await evmWallet.sendTransaction(txParams);
 
       const explorerUrl = `${PORTALDOT_EXPLORER_URL}`;
+      this.updateActive({
+        status: 'SUBMITTED',
+        txHash,
+        explorerUrl
+      });
       this.updateActive({
         status: 'MINING',
         txHash,

@@ -279,8 +279,8 @@ export const TransferPanel: React.FC<Props> = ({
         <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-cyan-200">Need Testnet Stablecoins? (pUSDC Faucet)</p>
-              <p className="text-[11px] text-slate-300">Claim 10,000 pUSDC simulation tokens directly from the verified contract faucet.</p>
+              <p className="text-xs font-semibold text-cyan-200">pUSDC Testnet Faucet</p>
+              <p className="text-[11px] text-slate-300">Faucet claims are disabled in this PortalNexus release. The token contract has a faucet, but this app will not submit a mint transaction.</p>
             </div>
             <button
               type="button"
@@ -293,7 +293,7 @@ export const TransferPanel: React.FC<Props> = ({
             </button>
           </div>
           <p className="text-[10px] text-slate-400 border-t border-cyan-500/20 pt-1.5 leading-relaxed">
-            <strong className="text-cyan-300">Policy Disclosure:</strong> The 10,000 pUSDC limit is strictly an on-chain per-call cap (<code className="text-cyan-200">MAX_MINT_PER_CALL</code>), not a total supply cap. Faucet minting is permissionless, has no cooldown period, and can be invoked repeatedly in successive transactions. pUSDC is strictly an unrestricted testnet simulation token with zero backing and zero real-world value.
+            <strong className="text-cyan-300">Token Disclosure:</strong> pUSDC is a testnet simulation token with no backing or real-world value. Although the deployed token contract exposes permissionless <code className="text-cyan-200">faucetMint</code> (up to 10,000 pUSDC per call), faucet submissions are disabled in this app.
           </p>
         </div>
       )}

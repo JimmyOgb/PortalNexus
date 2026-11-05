@@ -26,6 +26,7 @@ import {
   bytesToHex,
   computeExtrinsicHash
 } from '../lib/substrateUtils';
+import { checkFeaturePermission } from './featureFlags';
 
 export interface SubstrateTransferParams {
   recipientSS58: string;
@@ -155,6 +156,13 @@ export class SubstrateTransferService {
     const { recipientSS58, amountStr, wallet, rpc, onStatusUpdate } = params;
     const walletState = wallet.getState();
     const senderAccount = walletState.selectedAccount;
+    const permission = checkFeaturePermission('nativeSubstrateTransfer', {
+      isWalletConnected: walletState.isConnected && Boolean(senderAccount),
+      isCorrectNetwork: true
+    });
+    if (!permission.allowed) {
+      throw new Error(permission.reason || 'Substrate native transfer is not permitted.');
+    }
 
     // Step 1: Pre-flight validation
     const validation = this.validateTransfer(

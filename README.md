@@ -23,11 +23,11 @@
 ### What the Hosted dApp Supports
 - **Live Dual-VM Observability:** Streaming telemetry from Portaldot Substrate WebSocket (`wss://test-node-v3.portaldot.dev`) and EVM JSON-RPC (`https://test-evm-rpc-v3.portaldot.dev`), displaying real-time block cadence offsets ($\Delta = \text{Substrate} - \text{EVM}$).
 - **Real Wallet Connectivity:** Dual-VM wallet support for EVM providers (MetaMask, Rabby) on Chain ID `420420777` and Substrate extensions (Polkadot{.js}, Talisman, SubWallet) on SS58 Prefix 42.
-- **Transfers & Faucet Panel (Tab 2):** Real-time testnet faucet claims (`10,000 pUSDC` per call, permissionless repeat minting), ERC-20 pUSDC token transfers, and native POT transfers on EVM and Substrate (using genuine `balances.transfer_keep_alive` extrinsic dispatch).
-- **Nexus AMM Panel (Tab 3):** Live reserve/balance reads, transaction previews, slippage/deadline math, and LP position redemption preparation. Writes remain gated; first liquidity is blocked for the legacy AMM because its bytecode ignores initial minimums.
+- **Transfers & Faucet Panel (Tab 2):** EVM pUSDC/POT and native Substrate tPOT transfers remain wallet-confirmed. The pUSDC faucet control is disabled in this release; the token contract itself has a permissionless faucet, but PortalNexus does not submit faucet transactions.
+- **Nexus AMM Panel (Tab 3):** Live reserve/balance reads and unsigned transaction preparation for the active V2 deployment. All AMM submissions remain disabled. V1 is retained as legacy; its deployed bytecode ignores initial minimums.
 - **In-dApp Contract Deployment Manager:** Direct browser-signed deployment modal supporting Architecture A (including the legacy `NexusAMMNative` v1 template) and Architecture B references. Deployment remains a separate user-confirmed action.
 - **`pallet-revive` Deterministic Address Inspector (Tab 1):** Real-time derivation of Substrate `SS58` addresses from EVM `0x...` (H160) keys via the `0xEE`-padding rule (`H160 || [0xEE; 12]`), complete with authoritative test vectors and explicit ownership boundary warnings.
-- **Floating Transaction Notification Toast:** Real-time lifecycle tracking (`PROMPTING_WALLET` -> `SUBMITTING` -> `MINING` -> `CONFIRMED`) with direct links to the Portaldot node console explorer.
+- **Floating Transaction Notification Toast:** Lifecycle labels distinguish permission checks, wallet confirmation, network submission, receipt wait, and receipt verification, with direct links to the Portaldot node console explorer.
 
 ### Critical Safety & Testnet Disclosures
 > [!IMPORTANT]
@@ -35,7 +35,7 @@
 > 2. **Simulation Token (`pUSDC`):** `pUSDC` is a testnet simulation token with **zero real-world monetary value and no asset backing**.
 > 3. **Wallet Safety:** PortalNexus never requests private keys or broadcasts unattended transactions. Enabled writes require explicit wallet confirmation; AMM transaction submission is disabled in this build.
 > 4. **Cross-VM Bridge Limitation:** Direct cross-VM teleportation is disabled because Portaldot V3 runtime does not expose client-accessible bridge extrinsics.
-> 5. **Empty-Pool Safety:** Swaps are disabled while reserves are zero. First liquidity is also blocked for the legacy AMM because its deployed bytecode ignores initial minimums.
+> 5. **AMM Safety:** The active V2 deployment enforces nonzero initial minimums and deadlines, but AMM transaction submission is disabled in this release. Read current reserves from the network; historical snapshots do not establish current pool state. V1 is legacy and ignores initial minimums.
 
 ---
 
@@ -44,11 +44,11 @@
 > [!CAUTION]
 > - **Testnet Prototype Only:** PortalNexus is an experimental prototype deployed on the **Portaldot V3 Testnet** (`Chain ID 420420777`). It is **not** a production financial service, has not undergone an external security audit, and must never be used with real funds.
 > - **Test Token (`pUSDC`):** `pUSDC` ([`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)) is an unbacked testnet simulation token with **zero real-world monetary value**.
-> - **Current Pool & Transaction Status:** V2 is deployed and independently verified at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` (block `333609`, transaction `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f`). It is empty: no liquidity or swap is claimed. Transaction submission remains gated (`TX_SUBMISSION_ENABLED = false`). V1 remains recorded as legacy at `0x407A2609dfd5336a38D6274B1EFc1804930f160A`; its initial-liquidity branch ignores minimums.
+> - **Deployment & Transaction Status:** V2 deployment evidence is recorded at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` (block `333609`, transaction `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f`). This historical record does not establish current reserves. AMM submission remains gated (`TX_SUBMISSION_ENABLED = false`). V1 at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` is legacy; its deployed initial-liquidity branch ignores minimums.
 
 ### AMM first-liquidity safety status
 
-The deployed [`NexusAMMNative`](./contracts/contracts/NexusAMMNative.sol) cannot be changed in place. Its empty-pool branch ignores `minAmountPOT` and `minAmountUSDC`, so a frontend check cannot eliminate the initialization race. PortalNexus blocks first liquidity on that legacy address. [`NexusAMMNativeV2`](./contracts/contracts/NexusAMMNativeV2.sol) is separately deployed at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` and requires both nonzero minimums while checking actual accepted POT and pUSDC amounts. It retains the 0.3% swap fee and 1,000 minimum-liquidity shares. The V2 pool currently has zero reserves; no liquidity or swap has been executed.
+The deployed [`NexusAMMNative`](./contracts/contracts/NexusAMMNative.sol) is immutable legacy V1. Its initial-liquidity branch ignores `minAmountPOT` and `minAmountUSDC`, so a frontend check cannot eliminate the initialization race; do not use it for liquidity. [`NexusAMMNativeV2`](./contracts/contracts/NexusAMMNativeV2.sol) is separately deployed at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` and requires both nonzero minimums while checking actual accepted POT and pUSDC amounts. It retains the 0.3% swap fee and 1,000 minimum-liquidity shares. AMM submissions are disabled, and this document makes no claim about current reserves or completed liquidity/swaps.
 
 See the [safety remediation report](./PORTALNEXUS_AMM_SAFETY_REMEDIATION_REPORT.md), [cost analysis](./PORTALNEXUS_AMM_COST_ANALYSIS.md), and [demo execution plan](./PORTALNEXUS_AMM_DEMO_EXECUTION_PLAN.md) for option comparisons, measured estimates, transaction gates, and evidence requirements.
 
@@ -108,15 +108,14 @@ PortalNexus separates read-only evaluation from write operations. AMM write subm
 | **Verified Contract Registry & RPC Getters** | ❌ None | ❌ None | None (`eth_call` to active V2 `0x9c01...01Df` and PortalTestStorage) |
 | **In-Browser Solidity 0.8.24 WASM Compiler** | ❌ None | ❌ None | None (Runs Solc v0.8.24 directly inside browser WebAssembly) |
 | **AMM Empty-Pool & Reserve Auditing** | ❌ None | ❌ None | None (`eth_call` to `getReserves()`) |
-| **Claim Testnet pUSDC (Contract Faucet)** | ✅ EVM Wallet | ⚠️ Small `tPOT` for gas | Safety-locked in this release; no `faucetMint` transaction is sent |
+| **pUSDC Faucet** | ❌ Not available through app | ❌ No app transaction | Faucet control is disabled; no `faucetMint` transaction is sent |
 | **EVM Transfers (pUSDC / POT)** | ✅ EVM Wallet | ✅ Token / Gas balance | Standard EIP-1193 browser extensions |
 | **Substrate Native tPOT Transfers** | ✅ Substrate Wallet | ✅ Native `tPOT` balance | Polkadot{.js}, Talisman, SubWallet (requires `signPayload`) |
 
 #### How to Obtain Testnet Tokens
 1. **Simulation Stablecoin (`pUSDC`):**  
-   - PortalNexus features an **open, permissionless on-chain contract faucet** built into [`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol).
-   - In **Tab 2 ("Transfers & Faucet")**, click **"Claim 10,000 pUSDC"**.
-   - The contract dispenses up to 10,000 `pUSDC` per transaction with zero cooldown and no access list.
+   - The deployed [`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol) contract contains a permissionless faucet capped at 10,000 pUSDC per call.
+   - **PortalNexus's faucet transaction control is disabled in this release.** The application does not claim tokens or submit `faucetMint` transactions. Do not treat the contract capability as an available app action.
 2. **Native Gas Token (`tPOT`):**  
    - To sign and broadcast transactions, an account requires native `tPOT` to pay EVM gas and `pallet-revive` storage deposits.
    - Testnet `tPOT` can be obtained through the official Portaldot Discord/Telegram developer faucets or community testnet taps.
@@ -159,7 +158,7 @@ Follow these step-by-step instructions to verify each core protocol capability:
 #### Feature 4: Verified Contract Registry & Live RPC Getters (`getValue() == 42`)
 1. Inside the expanded **Deep Diagnostics** accordion, locate the **`Verified Contracts Registry`** section.
 2. Observe the three verified contract cards:
-   - `NexusAMMNative` legacy v1 (`0x407A...160A`; not the active pool)
+   - `NexusAMMNativeV2` active deployment (`0x9c01...01Df`); V1 is shown only as legacy history
    - `TestUSDCMin` (`0x6C3B...4002`)
    - `PortalTestStorage` (`0x5065...f6F8`)
 3. On the `PortalTestStorage` card, click **`Re-verify Live State`**.
@@ -180,17 +179,16 @@ Follow these step-by-step instructions to verify each core protocol capability:
 5. **Expected Observable Result:**  
    The browser executes the official `solc-js` 0.8.24 WebAssembly compiler locally without contacting external servers. Compilation succeeds with **Status: Ready for Deployment**, displaying the exact compiled bytecode (678 bytes) and estimating the `pallet-revive` storage rent deposit (~0.0589 POT/byte + 18.32 POT base trie deposit). Press `Escape` or click the `✕` button to close the modal.
 
-#### Feature 6: AMM Reserve Auditing & Empty-Pool Protection (Tab 3)
+#### Feature 6: AMM Reserve Auditing & Submission Safety (Tab 3)
 1. Switch to **`3. Nexus AMM`** in the main execution terminal.
 2. Inspect the **Reserve POT** and **Reserve pUSDC** cards.
-3. Observe the amber alert banner:
-   `AMM Reserves Empty (0/0) — Swap Execution Disabled`
+3. Read the live reserve values and note whether they are available or show an RPC error. If both reserves are zero, the UI displays its empty-pool warning and blocks swap preparation.
 4. Try typing a swap amount into the "You Pay" input.
 5. Open the add-liquidity tab and review the legacy deployment warning.
 6. **Expected Observable Result:**  
-   - Live on-chain `eth_call` to `getReserves()` returns `reservePOT = 0.00` and `reserveUSDC = 0.00`.
-   - The UI blocks swap execution, protecting users from zero-liquidity division-by-zero reverts.
-   - The interface refuses first-liquidity calldata for legacy v1 and selects verified V2. The V2 deployment receipt and getters are independently verified; the pool is empty and no liquidity or swap is claimed.
+   - The displayed reserves come from live `eth_call` data; this README does not prescribe a current reserve value.
+   - The AMM submission control remains disabled regardless of reserve state. The UI also refuses swap preparation against an empty pool.
+   - The interface selects deployed V2 and retains V1 only as legacy. Current reserves must be checked through live RPC; no current pool state or completed swap is asserted by this documentation.
 
 ---
 
@@ -200,9 +198,9 @@ All smart contracts referenced by PortalNexus are deployed, immutable, and verif
 
 | Contract Name | Verified On-Chain Address | Deployed Block | Bytecode Size | Verified Role / Method |
 | :--- | :--- | :---: | :---: | :--- |
-| **`NexusAMMNative` (legacy v1)** | [`0x407A2609dfd5336a38D6274B1EFc1804930f160A`](https://node-console.portaldot.dev/) | `#237284` | 3,305 bytes | Legacy AMM; initial contribution minimums are ignored |
-| **`NexusAMMNativeV2` (active)** | [`0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`](https://node-console.portaldot.dev/) | `#333609` | 3,488 bytes | Native POT/pUSDC AMM; corrected first-liquidity minimum enforcement; currently empty |
-| **`TestUSDCMin`** | [`0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002`](https://node-console.portaldot.dev/) | `#237279` | 1,482 bytes | 6-decimal simulation stablecoin with open `faucetMint` |
+| **`NexusAMMNativeV2` (active)** | [`0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`](https://node-console.portaldot.dev/) | `#333609` | 3,488 bytes | Native POT/pUSDC AMM; source enforces nonzero first-liquidity minimums; current reserves must be read live |
+| **`NexusAMMNative` (legacy v1)** | [`0x407A2609dfd5336a38D6274B1EFc1804930f160A`](https://node-console.portaldot.dev/) | `#237284` | 3,305 bytes | Historical AMM; initial contribution minimums are ignored; do not use for new liquidity |
+| **`TestUSDCMin`** | [`0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002`](https://node-console.portaldot.dev/) | `#237279` | 1,482 bytes | 6-decimal simulation stablecoin; contract has `faucetMint`, but the app faucet action is disabled |
 | **`PortalTestStorage`** | [`0x5065125265638A4b354FDDfe1f9339F65cC9f6F8`](https://node-console.portaldot.dev/) | `#261857` | 275 bytes | Storage getter test contract (`getValue() == 42`) |
 
 #### Independent RPC Verification Commands
@@ -227,10 +225,10 @@ curl -s -X POST https://test-evm-rpc-v3.portaldot.dev \
 
 In the spirit of complete hackathon transparency, please note the following verified limitations:
 
-1. **Unseeded AMM Pool Reserves (`0/0`):**  
-   The deployed V2 pool currently holds zero reserves (`0 POT / 0 pUSDC`). Legacy v1 remains at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` and ignores initial minimum amounts, so the UI blocks first liquidity there. V2 was deployed at block `333609`; its transaction hash is `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f`, with actual fee `293.236911910284596805 POT`. Deployer balance after deployment was `81.393547937577512395 POT` at the latest recorded read. See [`PORTALNEXUS_AMM_COST_ANALYSIS.md`](./PORTALNEXUS_AMM_COST_ANALYSIS.md).
+1. **Current AMM Pool State Requires a Live Read:**
+   V2 deployment is recorded at block `333609` with transaction `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f`. That historical deployment evidence does not establish the pool's current reserves; read current values from the network. AMM writes remain disabled. V1 at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` is legacy and ignores initial minimums.
 2. **Swap Execution Disabled:**  
-   The UI detects zero reserves and disables swap execution. It also refuses to prepare first-liquidity calldata for v1 and explains the deployed contract limitation.
+   AMM submissions are disabled in this release. The V2 contract source enforces nonzero initial minimums; never use the legacy V1 contract for liquidity. Read reserves live and do not infer current pool state from this document.
 3. **No Direct Client Cross-VM Teleport Extrinsic:**  
    Portaldot V3 `pallet-revive` does not expose a trustless, client-callable extrinsic for instantaneous cross-VM token teleportation. Tab 1 functions as an authoritative address mapping and ownership inspector.
 4. **Substrate Wallet Extrinsic Signing Requirement:**  
@@ -268,8 +266,8 @@ npm run build
 ```
 
 **Automated Test Summary:**
-- **Vitest:** 15 test files, 196 passing unit and integration tests (final V2 integration audit).
-- **Hardhat:** 52 passing smart contract invariant tests across 5 test suites.
+- **Vitest:** 15 test files, 196 passing unit and integration tests (remediation verification, 2026-11-05).
+- **Hardhat:** 52 passing smart contract invariant tests across 5 test suites (remediation verification, 2026-11-05).
 - **Total:** **248 passing automated tests** (196 frontend and 52 contract tests). This count is not a claim of 100% protocol coverage.
 
 ---
@@ -306,9 +304,9 @@ Portaldot Network V3.0 replaces legacy Polkadot Frontier (`pallet-evm`) with Pol
    - **Monitor Dual-VM Consensus in Real Time:** Stream live block heights, finality, gas prices, and rolling 15-sample block-cadence offsets ($\Delta = \text{Substrate} - \text{EVM}$) from both Portaldot V3 endpoints simultaneously.
    - **Derive Verified `pallet-revive` Addresses:** Convert any `0x...` (`H160`) address into its exact `pallet-revive` `SS58` (Prefix `42`) fallback account (`H160 || [0xEE; 12]`) with built-in guards against legacy Frontier hashing.
    - **Inspect Live Deployed AMM & Token State:** Query live `getReserves()`, `totalLiquidityShares()`, `totalSupply()`, and wallet balances (`POT` and `pUSDC`) directly from active V2 (`0x9c01...01Df`) and pUSDC (`0x6C3B...4002`) with zero fabricated fallback data.
-   - **Preview Exact Calldata & Constant-Product Math:** Construct and inspect unsigned transaction payloads (`to`, `valueHex`, selector, ABI-encoded arguments) for `faucetMint`, exact-allowance `approve`, `addLiquidity`, `removeLiquidity`, and swaps (`swapExactPOTForTokens`, `swapExactTokensForPOT`).
+   - **Preview AMM Calldata & Constant-Product Math:** Inspect unsigned V2 payloads for exact-amount `approve`, `addLiquidity`, `removeLiquidity`, and swaps. The faucet control is disabled; no faucet transaction can be submitted through the app.
 2. **What Remains Planned (Requires Separate User Authorization):**
-   - V2 deployment is complete and independently verified. Faucet funding, token approval, liquidity provision, and swaps have not been executed. The V2 pool is empty.
+   - V2 deployment evidence is recorded. Faucet funding, token approval, liquidity provision, and swaps have not been executed. Read current V2 reserves from live RPC; no current reserve value is asserted here.
 
 ---
 
@@ -316,8 +314,8 @@ Portaldot Network V3.0 replaces legacy Polkadot Frontier (`pallet-evm`) with Pol
 
 | Feature | Status | Verified Evidence | Current Limitations |
 | :--- | :--- | :--- | :--- |
-| **Architecture A Smart Contracts (`TestUSDCMin` & `NexusAMMNative`)** | `DEPLOYED / LEGACY SAFETY LIMITATION` | Deployed on Portaldot V3 (`0x6C3B...4002` at block `#237279`, `0x407A...160A` at block `#237284`); legacy behavior covered by Hardhat tests. | V1 first-liquidity bounds are ignored by bytecode; empty-pool initialization is blocked in the frontend. |
-| **Corrected Native AMM (`NexusAMMNativeV2`)** | `DEPLOYED / VERIFIED / EMPTY` | Address `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`, block `333609`; receipt and getters independently verified. | Zero reserves; AMM submission remains disabled. |
+| **AMM contracts (`NexusAMMNativeV2`, legacy V1, `TestUSDCMin`)** | `V2 DEPLOYED / AMM WRITES DISABLED` | V2 deployment is recorded at `0x9c01...01Df` (`#333609`); V1 remains historical at `0x407A...160A`. | V2 source enforces nonzero initial bounds; V1 bytecode ignores them. Current reserves require a live read. |
+| **Corrected Native AMM (`NexusAMMNativeV2`)** | `DEPLOYED / VERIFIED / SUBMISSION DISABLED` | Address `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`, deployment block `333609`; receipt and deployment getters recorded. | Read current reserves from the network; AMM submission remains disabled. |
 | **Reference 3-Contract Suite (`WPotToken`, `TestUSDC`, `NexusAMM`, `NexusLPReceipt`)** | `VERIFIED` | 32 Hardhat unit & invariant tests passing across 4 test files in [`contracts/test/`](./contracts/test/). | Preserved for local verification; superseded on-chain by Architecture A to save `~683 POT` in state rent. |
 | **Live Read-Only AMM & Token Telemetry (`AmmPanel.tsx`, `ammService.ts`)** | `VERIFIED` | Live `eth_call` reads for reserves, shares, supply, balances, allowance, and LP logs; 19 tests in [`tests/liveIntegration.test.ts`](./tests/liveIntegration.test.ts). | Reads current live state; no LP positions or swaps have been created on-chain. |
 | **Dual-VM Cadence Monitor (`substrateRpc.ts`, `evmRpc.ts`, `blockMonitor.ts`)** | `VERIFIED` | Live WebSocket (`wss://test-node-v3.portaldot.dev`) and HTTP (`https://test-evm-rpc-v3.portaldot.dev`) polling; 12 unit tests in `blockMonitor.test.ts` & `rpcParsers.test.ts`. | Public EVM RPC occasionally experiences 7s Cloudflare edge timeouts (UI surfaces error cleanly with a Retry button). |
@@ -325,7 +323,7 @@ Portaldot Network V3.0 replaces legacy Polkadot Frontier (`pallet-evm`) with Pol
 | **Transaction Preparation & Calldata Builder (`ammService.ts`)** | `VERIFIED` | Encodes exact ABI calldata verified against Hardhat `ethers.Interface` in [`tests/liveIntegration.test.ts`](./tests/liveIntegration.test.ts). | Generates unsigned transaction previews only; does not sign or broadcast. |
 | **EVM & Substrate Wallet Connectors (`evmWallet.ts`, `substrateWallet.ts`)** | `MOCK-TESTED` | 9 unit tests in [`tests/walletIntegrations.test.ts`](./tests/walletIntegrations.test.ts) + Playwright injected provider smoke tests (connected, wrong-chain, 4001 rejection). | Not yet manually tested with a real user browser extension (MetaMask/Rabby/Talisman) in a live session. |
 | **3D Dual-VM Singularity Canvas (`ThreeCanvas.tsx`)** | `VERIFIED` | WebGL Three.js scene with camera focus modes (`overview`, `substrate`, `evm`), warp pulse, and reduced-motion pause toggle. | Visual observability layer only. |
-| **AMM and Faucet Transaction Broadcasting** | `DISABLED` | AMM panel gate and feature flags deny faucet, approval, liquidity, removal, and swap submission. | No liquidity or swap receipt is claimed. V2 is deployed but empty. |
+| **AMM and Faucet Transaction Broadcasting** | `DISABLED` | AMM gate and feature flags deny faucet, approval, liquidity, removal, and swap submission. | No liquidity or swap receipt is claimed. Current V2 reserves are not asserted here; read them live. |
 | **Cross-VM Token Teleport Execution** | `DISABLED` | Explicitly labeled disabled in Tab 1 UI. | Portaldot V3 does not expose a trustless client-side cross-VM transfer extrinsic without an account mapping/bridge step. |
 
 ---
@@ -383,9 +381,9 @@ flowchart LR
 
 | Contract | Role / Pair | Deployed Address | Deployment Tx Hash | Block | Runtime Bytecode | Actual Cost |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **[`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)** | `pUSDC` Test Token (6 Decimals, 10,000/call faucet cap, permissionless repeat minting, zero backing) | `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` | `0x4534608666225d9fba0f8c69a28dd29c4130825b06a5160c33e6beec1b225152` | `#237279` | `1,482 bytes` | `128.867113 POT` |
+| **[`TestUSDCMin.sol`](./contracts/contracts/TestUSDCMin.sol)** | `pUSDC` test token (6 decimals, 10,000/call contract faucet cap, zero backing); app faucet control disabled | `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` | `0x4534608666225d9fba0f8c69a28dd29c4130825b06a5160c33e6beec1b225152` | `#237279` | `1,482 bytes` | `128.867113 POT` |
 | **[`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol) (legacy v1)** | Constant-Product AMM (`Native POT / pUSDC`, 0.3% fee); ignores initial minimums | `0x407A2609dfd5336a38D6274B1EFc1804930f160A` | `0x48cd085966cc570984aa4883d05ed3c26de9ade7d4296f909cc47f6ae0e9ba54` | `#237284` | `3,305 bytes` | `278.944414 POT` |
-| **[`NexusAMMNativeV2.sol`](./contracts/contracts/NexusAMMNativeV2.sol) (active)** | Corrected constant-product AMM (`Native POT / pUSDC`, 0.3% fee), empty pool | `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` | `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f` | `#333609` | `3,488 bytes` | `293.236911910284596805 POT` |
+| **[`NexusAMMNativeV2.sol`](./contracts/contracts/NexusAMMNativeV2.sol) (active)** | Corrected constant-product AMM (`Native POT / pUSDC`, 0.3% fee); current reserves require live read | `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` | `0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f` | `#333609` | `3,488 bytes` | `293.236911910284596805 POT` |
 
 > [!NOTE]
 > **Architecture A vs. Architecture B Liquidity Positions (SEC-02 Disclosure):**
@@ -398,27 +396,21 @@ flowchart LR
 
 ---
 
-## I. Current Network and Pool Status
+## I. Network and Pool Status
 
-Pool reserves and configuration were independently checked after deployment; the historical V1/token snapshot below was read at block `333238` on `2026-11-05` and does not describe a new token read:
+V2 deployment details are historical records. Current reserves, LP supply, token supply, and wallet balances are **not asserted by this README** and must be read from live Portaldot V3 RPC when needed. During the November 5, 2026 production audit, the RPC did not return usable contract-state responses, so current pool state could not be refreshed. AMM transaction submission remains disabled independently of pool state. No successful liquidity or swap is claimed.
 
-- **`NexusAMMNativeV2.getReserves()`:** `reservePOT = 0`, `reserveUSDC = 0` (**Empty Pool**)
-- **`NexusAMMNativeV2.totalLiquidityShares()`:** `0`
-- **`NexusAMMNativeV2.usdc()`:** `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` (Verified)
-- **`NexusAMMNativeV2.receiptContract()`:** `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` (Verified self-authority)
-- **`TestUSDCMin.totalSupply()`:** `0` (`0.00 pUSDC`)
-- **Deployer Balance:** `81.393547937577512395 POT` at the latest post-deployment read (balance is time-sensitive).
-
-Because V2 `getReserves()` returns `(0, 0)`, **live token swapping cannot currently be demonstrated against on-chain pool liquidity**. The UI detects the empty pool and blocks swaps. It also blocks first liquidity on the legacy deployment because its bytecode ignores initial minimums. V2 is deployed and verified; no liquidity or swap receipt is claimed.
-
+- **Active AMM:** V2 at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` (deployment block `333609`).
+- **V1:** Legacy at `0x407A2609dfd5336a38D6274B1EFc1804930f160A`; do not use for liquidity because its deployed initial branch ignores minimums.
+- **Token:** pUSDC at `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002`.
 ---
 
 ## J. Screenshots and Demo
 
-### Genuine Live UI Captures (Playwright Chromium against Live Portaldot V3 RPC)
+### Historical UI Captures (not evidence of current pool state)
 
 ````carousel
-![PortalNexus AMM Panel — Live Empty-Pool State & Verified Contracts](./docs/assets/amm-live-empty-pool.png)
+![PortalNexus AMM Panel — Historical empty-pool capture; not current network state](./docs/assets/amm-live-empty-pool.png)
 <!-- slide -->
 ![PortalNexus AMM Panel — Connected Balance Read (historical capture: 13.088472 POT)](./docs/assets/amm-connected-preview.png)
 ````
@@ -493,9 +485,9 @@ npm run build
 | Verification Type | Executed? | Result | Notes |
 | :--- | :--- | :--- | :--- |
 | **Hardhat Contract Unit Tests** | ✅ Yes | `52 passing` | Includes V2 initial-liquidity bounds, swaps, fees, reserve accounting, LP receipts, and legacy/reference contracts. |
-| **Vitest Frontend & Mocked RPC Tests** | ✅ Yes | `194 passing` (pre-publication integration audit) | Includes registry, transaction-gate, ABI selector, compiler, Substrate transfer, and RPC inspection checks. |
+| **Vitest Frontend & Mocked RPC Tests** | ✅ Yes | `196 passing` (remediation verification, 2026-11-05) | Includes registry, transaction-gate, ABI selector, compiler, Substrate transfer, and RPC inspection checks. |
 | **TypeScript & Vite Production Build** | ✅ Yes | `Exit 0` | Clean compilation and bundle generation. |
-| **Live Read-Only Portaldot V3 RPC Checks** | ✅ Yes | V2 receipt and getters rechecked during final integration audit | Confirmed chain ID, deployment receipt/address/block, runtime code hash, pUSDC binding, receipt authority, zero reserves, and zero LP shares. |
+| **Live Read-Only Portaldot V3 RPC Checks** | ⚠️ Historical | Prior deployment checks only; no current contract-state verification in this remediation | Current bytecode, reserves, LP shares, allowance, and balances were not refreshed for this patch. |
 | **Real Browser Wallet Extension QA** | ❌ No | `Mock-Tested Only` | Tested via Playwright injected `window.ethereum` stub; manual MetaMask/Rabby extension session not yet run. |
 | **Live End-to-End Write Transactions** | ❌ No | `Not Executed` | Faucet, AMM approvals, liquidity, removal, and swaps are safety-locked; no swap is claimed. |
 
@@ -505,7 +497,7 @@ npm run build
 
 1. **Testnet Prototype Only:** Deployed on Portaldot V3 Testnet (`Chain ID 420420777`). Not audited and not suitable for mainnet or real assets.
 2. **`pUSDC` Has Zero Value:** `pUSDC` is a testnet simulation token with an on-chain `faucetMint` function (capped at `10,000 pUSDC` per call) and zero backing. The app's faucet transaction control is disabled in this release.
-3. **Empty Pool State (`0 POT / 0 pUSDC`):** No liquidity has been deposited. The legacy AMM does not enforce initial minimums; V2 is deployed at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` and enforces them. The deployment used `293.236911910284596805 POT`; this does not imply that later storage deposits or fees are refundable.
+3. **Current Pool State:** Read reserves live; no present-tense reserve or liquidity claim is made here. V1 does not enforce initial minimums; V2 at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` does. The V2 deployment fee record is historical and does not imply later storage deposits or fees are refundable.
 4. **Transaction Submission Disabled (`TX_SUBMISSION_ENABLED = false`):** The UI prepares and displays exact transaction calldata and slippage/deadline bounds, but the submit button is permanently disabled in this build.
 5. **Real Wallet Extension & End-to-End Tx Flows Untested Live:** Wallet state handling was tested with mocked/injected providers only.
 6. **Whole-Position LP Redemption:** `NexusAMMNative.removeLiquidity` redeems and burns the entire ERC-721 position NFT (`tokenId`) rather than partial share withdrawals.
@@ -515,7 +507,7 @@ npm run build
 ## O. Roadmap
 
 See [`docs/ROADMAP.md`](./docs/ROADMAP.md) for the full post-hackathon plan:
-1. **Phase 1 (Immediate):** Acquire $\ge 50\text{ tPOT}$ from the Portaldot community faucet and execute the 5-step live transaction test plan ([`PORTALNEXUS_TRANSACTION_TEST_PLAN.md`](./PORTALNEXUS_TRANSACTION_TEST_PLAN.md)).
+1. **Phase 1 (Blocked):** Do not obtain additional funding or execute the historical live transaction plan. AMM and faucet submissions remain disabled, and the existing 20 tPOT aggregate test cap is binding until separately changed by the user.
 2. **Phase 2:** Publish static frontend hosting and conduct manual QA with MetaMask, Rabby, SubWallet, and Talisman extensions.
 3. **Phase 3:** Extract `reviveMapper.ts` and the `pallet-revive` storage-deposit estimator into a standalone `@portalnexus/revive-kit` npm package.
 4. **Phase 4:** Multi-pool factory support, `Revive::OriginalAccount` on-chain lookup integration, and independent security auditing.
@@ -530,7 +522,7 @@ Full audit details are recorded in [`PORTALNEXUS_HACKATHON_REQUIREMENTS_AUDIT.md
 
 | Judging Criterion (Weight) | How PortalNexus Delivers | Verified Evidence | Open Gaps |
 | :--- | :--- | :--- | :--- |
-| **Technical Feasibility (30%)** | Solidity `0.8.24` V2 deployed and verified on Portaldot V3; fresh automated tests; live Dual-VM RPC clients; zero-dependency ABI encoder/decoder. | Active V2 `0x9c01...01Df` (`#333609`), pUSDC `0x6C3B...4002` (`#237279`), [`docs/TESTING_AND_EVIDENCE.md`](./docs/TESTING_AND_EVIDENCE.md). | V2 is empty; no faucet, liquidity, or swap transaction has been executed. |
+| **Technical Feasibility (30%)** | Solidity `0.8.24` V2 deployment record; automated tests; live Dual-VM RPC clients; zero-dependency ABI encoder/decoder. | Active V2 `0x9c01...01Df` (`#333609`), pUSDC `0x6C3B...4002` (`#237279`), [`docs/TESTING_AND_EVIDENCE.md`](./docs/TESTING_AND_EVIDENCE.md). | Current reserves are unverified; no faucet, liquidity, or swap transaction is claimed. |
 | **Innovation (30%)** | Historical Architecture A v1 eliminated `WPotToken` and reduced the earlier AMM deployment footprint. | [`PORTALNEXUS_DEPLOYMENT_COST_INVESTIGATION.md`](./PORTALNEXUS_DEPLOYMENT_COST_INVESTIGATION.md), legacy [`NexusAMMNative.sol`](./contracts/contracts/NexusAMMNative.sol). | Cross-VM teleport tab is a read-only address inspector. |
 | **Ecosystem Contribution (20%)** | Open-source `reviveMapper.ts` (`AccountId32Mapper` `0xEE` padding) + published empirical `pallet-revive` storage-deposit benchmarks (`0.0589 POT/byte`). | [`src/lib/reviveMapper.ts`](./src/lib/reviveMapper.ts), [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). | Standalone npm package extraction is planned for Phase 3. |
 | **Business Potential (20%)** | Provides the foundational native `POT` / stablecoin liquidity primitive and safe Dual-VM account tooling needed by all Portaldot V3 DeFi users. | [`docs/ROADMAP.md`](./docs/ROADMAP.md), [`PORTALNEXUS_TRANSACTION_TEST_PLAN.md`](./PORTALNEXUS_TRANSACTION_TEST_PLAN.md). | Requires initial testnet liquidity seeding, demo video, and pitch deck before Demo Days. |
@@ -545,9 +537,8 @@ A complete walkthrough and 2.5-minute video script are available in [`docs/DEMO_
 2. **Observe Live Dual-VM Telemetry:** Watch the header and hero cards stream live Substrate (`wss://test-node-v3.portaldot.dev`) and EVM (`https://test-evm-rpc-v3.portaldot.dev`) block heights and lockstep offset ($\Delta$). Expand **Deep Diagnostics** at the bottom to view the rolling 15-sample cadence table.
 3. **Test `pallet-revive` Address Derivation (`1. Cross-VM Map`):** Click **`Preset: Verified Deployer (0xdC7f…8A2A)`** to derive its exact `SS58` Prefix 42 fallback address (`5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu`).
 4. **Inspect Live AMM Reads & Safety Status (`2. Nexus AMM (native POT)`):**
-   - View the live on-chain `getReserves()` result (`0.00 POT / 0.00 pUSDC`) and verified contract addresses.
-   - Open **Add** and see that initial liquidity against v1 is blocked because the deployed contract ignores minimums. V2 appears in the registry as local source only.
-   - Transaction submission is disabled, including faucet and AMM actions. No successful liquidity or swap exists to display.
+   - View live `getReserves()` output or an explicit read error, plus the configured V2 address.
+   - AMM preparation may show unsigned V2 calldata with nonzero minimums, but transaction submission is disabled. The faucet action is also disabled. No successful liquidity or swap is claimed here.
 
 ---
 

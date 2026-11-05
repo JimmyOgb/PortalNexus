@@ -431,6 +431,19 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+.webgl-background-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ambient-vignette {
+  background: radial-gradient(circle at center, transparent 15%, #030712 95%);
+}
+
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   * {

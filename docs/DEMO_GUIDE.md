@@ -31,23 +31,13 @@ Open **`http://localhost:5173`** in your browser.
   - The deterministic `pallet-revive` fallback SS58 address (`5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu`) is computed in real time using `H160 || [0xEE; 12]` with SS58 Prefix `42` and a 2-byte `blake2b-512` checksum.
   - Click **`Preset: Reference Vector (0x1111…1111)`** to see the canonical test vector `5CT5jwBEAhveEjgiSCQbkaKcKcUyGT47FQKa1yyuvLR62v8j`.
 
-### Step 4 — Inspect Live AMM Contract State & Calldata Preparation (`2. Nexus AMM (native POT)` Tab)
-- **What to click:**
-  - Switch to Tab 2 (**`2. Nexus AMM (native POT)`**).
-- **What appears on screen (Live RPC Reads):**
-  - Verified deployed contract addresses and deployment blocks (`NexusAMMNative` at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` `#237284`, `TestUSDCMin` at `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` `#237279`).
-  - Live `getReserves()` result: `0.00 POT` and `0.00 pUSDC`, `0` LP shares, and `0.00 pUSDC` total supply on-chain.
-  - Honest empty-pool disclosure: *"The pool has zero reserves. Trading is unavailable until liquidity is added."*
-- **Interactive Calldata & Math Preview (No Wallet or Broadcast Required):**
-  1. Click **`Preview Initial Liquidity Calldata (0.5 POT + 10 pUSDC) →`**.
-  2. The panel switches to **`Add`** mode with `0.5` POT and `10` pUSDC pre-filled.
-  3. Inspect the live confirmation breakdown:
-     - First-deposit share calculation: $\lfloor\sqrt{0.5 \times 10^{18} \times 10 \times 10^6}\rfloor - 1000 = \mathbf{2,236,067,976,499\text{ shares}}$ (`1000` shares permanently locked).
-     - **Tx 1:** Exact-amount `approve(0x407A...160A, 10000000)` on `pUSDC` (`0x6C3B...4002`), selector `0x095ea7b3`.
-     - **Tx 2:** Payable `addLiquidity(10000000, 0, 0, deadline)` on `NexusAMMNative` (`0x407A...160A`), `value: 0x6f05b59d3b20000` (`0.5 POT`), selector `0xaebf3e41`.
-  4. Switch to **`Faucet`** and enter `100` to inspect the prepared `faucetMint(recipient, 100000000)` calldata (`0xa5c51274...`).
-  5. Confirm that the submit button remains safely disabled (*"Transaction submission disabled in this build — preparation only"*).
-
+### Step 4 — Inspect the Active V2 AMM (`3. Nexus AMM` Tab)
+- Switch to **`3. Nexus AMM`**. The active registry entry is **NexusAMMNativeV2**, deployed at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`. V1 at `0x407A2609dfd5336a38D6274B1EFc1804930f160A` is legacy and must not be used for liquidity.
+- Read reserves, token balances, LP position, and allowance from live RPC responses. If a live read is unavailable, report it as unavailable; a historical empty-pool snapshot does not establish current state.
+- V2 source defines payable `addLiquidity(uint256 amountUSDCDesired,uint256 minAmountPOT,uint256 minAmountUSDC,uint256 deadline)`. Initial deposits require both minimums to be nonzero. The provider chooses the initial price by choosing the POT/pUSDC ratio. The frontend preview derives minimums from the selected slippage tolerance and sets a deadline. Never substitute zero minimums or reuse a stale quote.
+- If approval is needed, the frontend prepares exact-amount `approve(V2, amountUSDC)` before `addLiquidity`; it does not request unlimited allowance. AMM submissions are disabled in this release, so neither prepared call can be submitted through the AMM UI.
+- V2 also defines payable `swapExactPOTForTokens(uint256 minAmountOut,address to,uint256 deadline)`, `swapExactTokensForPOT(uint256 amountIn,uint256 minAmountOut,address to,uint256 deadline)`, and `removeLiquidity(uint256 tokenId,uint256 minAmountPOT,uint256 minAmountUSDC,address to,uint256 deadline)`. The frontend derives swap minimum output from its quote and selected slippage tolerance. Deadlines and minimums must be respected.
+- Unsigned calldata and math are preparation only, not wallet confirmation, broadcast, receipt, or evidence of a completed swap. No successful liquidity or swap is claimed.
 ---
 
 ## 2. Concise 2.5-Minute Demo Video Script (≤ 3:00 Official Limit)
@@ -58,7 +48,7 @@ Open **`http://localhost:5173`** in your browser.
 | :--- | :--- | :--- |
 | **0:00 – 0:30** | Title slide / Hero view of PortalNexus (`http://localhost:5173`) showing the 3D Dual-VM Singularity and live block heights. | *"PortalNexus is a Dual-VM observability and native Constant-Product AMM terminal built for Portaldot V3.0. Moving from Polkadot Frontier to `pallet-revive` introduces two critical challenges for builders and users: completely different SS58↔H160 address mapping rules, and Substrate state-rent deposits bundled into EVM gas."* |
 | **0:30 – 1:15** | Expand **Deep Diagnostics** drawer; then demonstrate Tab 1 (**`1. Cross-VM Map`**) toggling between `0x1111...1111` and Deployer `0xdC7f...8A2A`. | *"First, PortalNexus connects directly to Portaldot V3's Substrate WebSocket and `pallet-revive` EVM RPC in lockstep. Our audited `reviveMapper` derives the exact `AccountId32Mapper` 12-byte `0xEE`-padded SS58 address, preventing permanent fund loss caused by legacy Frontier hashing."* |
-| **1:15 – 2:10** | Switch to Tab 2 (**`2. Nexus AMM (native POT)`**). Point out the deployed contract addresses, live `getReserves()` read, and click **`Preview Initial Liquidity Calldata`**. | *"Second, we engineered Architecture A specifically for `pallet-revive` state-rent economics. By pairing native POT directly with `pUSDC` and embedding ERC-721 LP receipts inside `NexusAMMNative`, we cut deployment state rent from 1,090 POT down to 407.81 POT. Both contracts are deployed and verified on Portaldot V3 Testnet at blocks 237,279 and 237,284. Here you can see live on-chain reserve reads and our exact two-step `approve` and `addLiquidity` calldata generator."* |
+| **1:15 – 2:10** | Switch to Tab 3 (**`3. Nexus AMM`**). Identify V2, show current live reserve-read status, then inspect unsigned transaction preparation with the submission control disabled. | *"PortalNexus pairs native POT with pUSDC through the V2 constant-product AMM at `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`. V2 enforces nonzero liquidity minimums and a deadline. Its 0.3% swap fee is applied by the contract. AMM writes remain disabled; no liquidity or successful swap is claimed. The older V1 deployment is retained as legacy and is not the liquidity route."* |
 | **2:10 – 2:30** | Show terminal running `npm test` (66 Vitest passing) and `npm run test:contracts` (46 Hardhat passing). | *"Every math invariant, ABI selector, and RPC parser is backed by 112 automated tests across Hardhat and Vitest. Transaction submission is fail-closed while the deployer wallet awaits additional `tPOT` for post-deployment state deposits. Thank you!"* |
 
 ---
@@ -72,12 +62,13 @@ Create a 7-slide PDF deck using the verified data in this repository:
    - Naive multi-contract DeFi suites cost >1,000 POT in `pallet-revive` bytecode state rent (`0.0589 POT/byte`).
 3. **Slide 3 — Our Solution (PortalNexus + Architecture A):**
    - Deterministic `AccountId32Mapper` (`H160 || 0xEE...12`) inspector + real-time Dual-VM block cadence monitor.
-   - `NexusAMMNative.sol`: Direct Native POT / `pUSDC` constant-product pool with unified ERC-721 LP receipts (`62.6%` state-rent reduction).
+   - `NexusAMMNativeV2.sol`: Active native POT / `pUSDC` constant-product AMM with nonzero initial minimums, deadlines, and unified LP position receipts. Legacy V1 remains historical.
 4. **Slide 4 — Architecture Diagram:** Embed the diagram from [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md).
 5. **Slide 5 — On-Chain Proof & Test Verification:**
    - `TestUSDCMin`: `0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002` (Block `#237279`, tx `0x45346086...`)
-   - `NexusAMMNative`: `0x407A2609dfd5336a38D6274B1EFc1804930f160A` (Block `#237284`, tx `0x48cd0859...`)
+   - `NexusAMMNativeV2`: `0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df` (Block `#333609`; see deployment receipt in `contracts/deployment-receipt-amm-v2.json`)
+   - `NexusAMMNative` V1 is legacy at `0x407A2609dfd5336a38D6274B1EFc1804930f160A`; its deployed code ignores initial minimum amounts.
    - 112 Automated Tests Passing (46 Hardhat + 66 Vitest).
 6. **Slide 6 — Honest Current State & `pallet-revive` Economics:**
-   - Contracts deployed & live reads active; pool reserves currently `0 / 0` because initial storage-slot creation (`balanceOf`, `allowance`, `_positions[1]`) requires ~25–30 POT in state rent vs `13.088 POT` remaining in deployer wallet.
+   - V2 is deployed and its deployment record is historical evidence only. Current pool reserves, deployer balance, and storage-deposit estimates require fresh read-only RPC results; do not present earlier values as current. No faucet, approval, liquidity, or swap transaction is claimed.
 7. **Slide 7 — Post-Hackathon Roadmap & Ecosystem Impact:** Reusable MIT-licensed `reviveMapper`, RPC clients, and compact DeFi primitives for all Portaldot V3 builders.

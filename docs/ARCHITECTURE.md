@@ -24,7 +24,8 @@ flowchart TD
     subgraph PortaldotV3["Portaldot V3 Testnet (Dual-VM Runtime v3002)"]
         SUBRPC["Substrate L0 WebSocket RPC\nwss://test-node-v3.portaldot.dev"]
         EVMRPC["pallet-revive EVM HTTP RPC\nhttps://test-evm-rpc-v3.portaldot.dev"]
-        AMM["NexusAMMNative.sol\n0x407A2609dfd5336a38D6274B1EFc1804930f160A\n(Block #237284)"]
+        AMM["NexusAMMNativeV2 (active)\n0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df\n(Block #333609)"]
+        LEGACY_AMM["NexusAMMNative v1 (legacy; do not use for liquidity)\n0x407A2609dfd5336a38D6274B1EFc1804930f160A\n(Block #237284)"]
         USDC["TestUSDCMin.sol (pUSDC)\n0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002\n(Block #237279)"]
         POT["Native EVM Currency (POT, 18 Decimals)"]
     end

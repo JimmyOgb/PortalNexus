@@ -1,15 +1,17 @@
 # PortalNexus — Post-Hackathon Roadmap
 
+> **Status:** The transaction sequence below is a historical proposal, not an executable guide. AMM and faucet submissions are disabled in the current app. The legacy V1 address must not be used for liquidity. Any future test plan must target V2, use fresh live state and current fee estimates, preserve nonzero minimums/deadlines, and receive separate explicit transaction authorization.
+
 All items below are **planned future work** and are not claimed as completed features in the current prototype release.
 
 ---
 
 ## Phase 1 — Testnet Liquidity Seeding & End-to-End Transaction Validation (Immediate Next Step)
-- **Prerequisite:** Top up the deployer/test wallet (`0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A` / SS58 `5H3pE4SQzSxPN5zuN1cqo7TbY7QuA9wHo3areDQDVLy2AUbu`) with $\ge 50\text{ tPOT}$ from the Portaldot community faucet to cover `pallet-revive` trie storage deposits (~25–35 POT across new mapping slots).
+- **Prerequisite:** No additional funding is authorized. The historical 50 tPOT top-up and 25–35 POT cost estimate are obsolete and must not be used as current guidance. The app's AMM and faucet transaction gates remain disabled; preserve the existing 20 tPOT aggregate test cap.
 - **Sequential Execution (per [`PORTALNEXUS_TRANSACTION_TEST_PLAN.md`](../PORTALNEXUS_TRANSACTION_TEST_PLAN.md)):**
-  1. Claim `20.00 pUSDC` via `TestUSDCMin.faucetMint` (`~7.82 POT` storage deposit).
-  2. Approve `15.00 pUSDC` for `NexusAMMNative` (`~3.92 POT` storage deposit).
-  3. Seed initial pool liquidity (`0.50 POT` + `10.00 pUSDC`) via `NexusAMMNative.addLiquidity` (`~14–18 POT` storage deposit).
+  1. The app faucet control is disabled. A future mint, if separately authorized, would target the test-token faucet; the old `20.00 pUSDC` and `~7.82 POT` estimate is historical and must not be reused.
+  2. If separately authorized, approve only the exact required pUSDC amount for active `NexusAMMNativeV2` (`0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df`); historical V1 approval estimates are not current estimates.
+  3. If separately authorized and current preflight permits it, prepare initial V2 liquidity with nonzero minimum POT/pUSDC amounts, a short deadline, and the intended initial ratio. Do not use V1 or reuse the historical 0.50 POT / 10.00 pUSDC proposal without fresh state and fee checks.
   4. Execute and verify bidirectional swaps (`swapExactPOTForTokens` and `swapExactTokensForPOT`) and partial/full liquidity removal (`removeLiquidity`).
   5. Enable opt-in transaction broadcasting in the UI behind explicit user confirmation and wallet network guards.
 

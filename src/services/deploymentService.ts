@@ -22,6 +22,7 @@ import {
 import { CONTRACT_REGISTRY, BUILTIN_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT } from '../contracts/config';
 import { isAddress } from '../contracts/abi';
 import { encodeConstructorArgs, ConstructorParam } from '../lib/abiEncoder';
+import { checkFeaturePermission } from './featureFlags';
 
 export interface CustomContractDeploymentPlan {
   contractName: string;
@@ -213,6 +214,15 @@ export class DeploymentService {
     };
   }
 
+  private deploymentPermissionError(): string | null {
+    const walletState = this.evmWallet.getState();
+    const permission = checkFeaturePermission('contractDeployment', {
+      isWalletConnected: walletState.isConnected,
+      isCorrectNetwork: walletState.isCorrectNetwork
+    });
+    return permission.allowed ? null : (permission.reason || 'Contract deployment is not permitted.');
+  }
+
   public getState(): DeploymentServiceState {
     return { ...this.state };
   }
@@ -337,6 +347,11 @@ export class DeploymentService {
    * STEP 1: Deploy WPotToken
    */
   public async deployWPot(): Promise<boolean> {
+    const permissionError = this.deploymentPermissionError();
+    if (permissionError) {
+      this.updateState({ step: 'ERROR', lastError: permissionError });
+      return false;
+    }
     const preflight = await this.runPreflight('wpot');
     if (!preflight.passed) {
       this.updateState({ step: 'ERROR', lastError: preflight.error });
@@ -416,6 +431,11 @@ export class DeploymentService {
    * STEP 2: Deploy TestUSDC
    */
   public async deployTestUSDC(): Promise<boolean> {
+    const permissionError = this.deploymentPermissionError();
+    if (permissionError) {
+      this.updateState({ step: 'ERROR', lastError: permissionError });
+      return false;
+    }
     if (!this.state.wpot.verified) {
       this.updateState({ step: 'ERROR', lastError: 'Cannot deploy TestUSDC before WPotToken is verified.' });
       return false;
@@ -493,6 +513,11 @@ export class DeploymentService {
    * STEP 3: Deploy NexusAMM
    */
   public async deployNexusAMM(): Promise<boolean> {
+    const permissionError = this.deploymentPermissionError();
+    if (permissionError) {
+      this.updateState({ step: 'ERROR', lastError: permissionError });
+      return false;
+    }
     if (!this.state.wpot.verified || !this.state.testUSDC.verified) {
       this.updateState({ step: 'ERROR', lastError: 'Both WPotToken and TestUSDC must be verified before deploying NexusAMM.' });
       return false;
@@ -858,6 +883,10 @@ export class DeploymentService {
     error?: string;
   }> {
     const walletState = this.evmWallet.getState();
+    const permissionError = this.deploymentPermissionError();
+    if (permissionError) {
+      return { success: false, error: permissionError };
+    }
     if (!walletState.isConnected || !walletState.address) {
       return { success: false, error: 'Wallet not connected. Connect an EVM wallet first.' };
     }
