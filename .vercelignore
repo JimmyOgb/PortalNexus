@@ -4,3 +4,6 @@
 /tests/
 .env*
 *.env
+/PORTALNEXUS_*.md
+/media/
+/scripts/
