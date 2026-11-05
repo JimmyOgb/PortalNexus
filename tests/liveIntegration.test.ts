@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { SELECTORS, LIQUIDITY_ADDED_TOPIC0, decodeWords } from '../src/contracts/abi';
-import { LIVE_DEPLOYMENT } from '../src/contracts/config';
+import { LIVE_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT } from '../src/contracts/config';
 import {
   readReserves, readPusdcBalance, readPusdcTotalSupply, readLpPositions, isPoolEmpty,
   needsPusdcApproval, parseAmountStrict, quoteAddLiquidity, swapOut, applySlippageDown, deadlineFrom,
   prepareFaucetMint, prepareApprove, prepareAddLiquidity, prepareRemoveLiquidity,
   prepareSwapPotForUsdc, prepareSwapUsdcForPot, TX_SUBMISSION_ENABLED, RpcCall,
+  assertPoolStateFresh, assertSafeInitialLiquidityTarget, simulatePreparedTransaction,
 } from '../src/services/ammService';
 
 const word = (n: bigint) => n.toString(16).padStart(64, '0');
@@ -92,6 +93,33 @@ describe('live reads (RPC mocked in tests only)', () => {
     expect(() => swapOut(1n, r.reservePot, r.reserveUsdc)).toThrow('no liquidity');
   });
 
+  it('rejects stale reserve snapshots before transaction confirmation', () => {
+    const expected = { reservePot: 10n, reserveUsdc: 20n, totalShares: 30n };
+    expect(() => assertPoolStateFresh(expected, expected)).not.toThrow();
+    expect(() => assertPoolStateFresh(expected, { ...expected, reserveUsdc: 21n })).toThrow('Pool state changed');
+    expect(() => assertPoolStateFresh(expected, { ...expected, totalShares: 31n })).toThrow('Pool state changed');
+  });
+
+  it('blocks an initial deposit on the known legacy contract and does not imply race protection', () => {
+    expect(() => assertSafeInitialLiquidityTarget(true, LEGACY_AMM_DEPLOYMENT.address)).toThrow('ignores initial minimums');
+    expect(() => assertSafeInitialLiquidityTarget(false, LEGACY_AMM_DEPLOYMENT.address)).not.toThrow();
+    expect(() => assertSafeInitialLiquidityTarget(true, LIVE_DEPLOYMENT.ammAddress)).not.toThrow();
+    expect(() => assertSafeInitialLiquidityTarget(true, '0x0000000000000000000000000000000000000001')).not.toThrow();
+  });
+
+  it('simulates the exact prepared call with sender and value', async () => {
+    const tx = prepareSwapPotForUsdc(12n, 10n, OWNER, 123n);
+    const rpc: RpcCall = async (method, params) => {
+      expect(method).toBe('eth_call');
+      expect(params[0]).toEqual({ from: OWNER, to: tx.to, data: tx.data, value: tx.valueHex });
+      expect(params[1]).toBe('latest');
+      return '0x';
+    };
+    await expect(simulatePreparedTransaction(rpc, tx, OWNER)).resolves.toBe('0x');
+    await expect(simulatePreparedTransaction(async () => { throw new Error('execution reverted'); }, tx, OWNER))
+      .rejects.toThrow('execution reverted');
+  });
+
   it('surfaces RPC errors and empty return data', async () => {
     await expect(readReserves(async () => { throw new Error('HTTP 503'); })).rejects.toThrow('HTTP 503');
     await expect(readReserves(async () => '0x')).rejects.toThrow('no data');
@@ -156,6 +184,8 @@ describe('math, validation and failure states', () => {
     const q = quoteAddLiquidity(10n ** 18n, 4_000_000n, empty, 50);
     expect(q.isFirstDeposit).toBe(true);
     expect(q.shares).toBe(2_000_000_000_000n - 1000n);
+    expect(q.minPot).toBe(995n * 10n ** 15n);
+    expect(q.minUsdc).toBe(3_980_000n);
     expect(() => quoteAddLiquidity(10n, 10n, empty, 50)).toThrow('too small');
   });
 
@@ -189,9 +219,14 @@ describe('math, validation and failure states', () => {
     expect(LIVE_DEPLOYMENT.pusdcAddress).toBe(receipt.contracts.testUSDC.address);
     expect(LIVE_DEPLOYMENT.pusdcDeployBlock).toBe(receipt.contracts.testUSDC.blockNumber);
     expect(LIVE_DEPLOYMENT.pusdcDeployTxHash).toBe(receipt.contracts.testUSDC.txHash);
-    expect(LIVE_DEPLOYMENT.ammAddress).toBe(receipt.contracts.nexusAMM.address);
-    expect(LIVE_DEPLOYMENT.ammDeployBlock).toBe(receipt.contracts.nexusAMM.blockNumber);
-    expect(LIVE_DEPLOYMENT.ammDeployTxHash).toBe(receipt.contracts.nexusAMM.txHash);
+    expect(LEGACY_AMM_DEPLOYMENT.address).toBe(receipt.contracts.nexusAMM.address);
+    expect(LEGACY_AMM_DEPLOYMENT.blockNumber).toBe(receipt.contracts.nexusAMM.blockNumber);
+    expect(LEGACY_AMM_DEPLOYMENT.txHash).toBe(receipt.contracts.nexusAMM.txHash);
+    const v2 = JSON.parse(readFileSync('contracts/deployment-receipt-amm-v2.json', 'utf8'));
+    expect(LIVE_DEPLOYMENT.ammAddress).toBe(v2.contractAddress);
+    expect(LIVE_DEPLOYMENT.ammDeployBlock).toBe(v2.blockNumber);
+    expect(LIVE_DEPLOYMENT.ammDeployTxHash).toBe(v2.transactionHash);
+    expect(CORRECTED_AMM_V2_DEPLOYMENT.address).toBe(v2.contractAddress);
     expect(LIVE_DEPLOYMENT.deployerAddress).toBe(receipt.deployer);
   });
 });

@@ -1,0 +1,47 @@
+{
+  "network": "Portaldot V3 Testnet",
+  "chainId": 420420777,
+  "contractName": "NexusAMMNativeV2",
+  "sourceFile": "contracts/contracts/NexusAMMNativeV2.sol",
+  "compiler": {
+    "version": "0.8.24",
+    "evmVersion": "cancun",
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "viaIR": true,
+    "linkedLibraries": []
+  },
+  "deployer": "0xdC7f5c7813a5f0e3F51c2Fe569DE6C5577768A2A",
+  "constructorArguments": {
+    "usdc": "0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002"
+  },
+  "transactionHash": "0x76349d5059c1be0bfe0ce83db4f43eb1099ceb89725b426b82e428ab2370e30f",
+  "transactionNonce": 3,
+  "transactionValueWei": "0",
+  "initcodeBytes": 3695,
+  "contractAddress": "0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df",
+  "blockNumber": 333609,
+  "blockHash": "0x53e6f6fc07f202f2c2cbf78931cc7824a583235ebf7e47112cae6ffa8e2a5f45",
+  "blockTimestamp": 1793875764,
+  "receiptStatus": 1,
+  "gasUsed": "13503887262734727",
+  "effectiveGasPriceWei": "21715",
+  "actualFeeWei": "293236911910284596805",
+  "actualFeePot": "293.236911910284596805",
+  "runtimeBytecodeBytes": 3488,
+  "runtimeBytecodeKeccak256": "0x53e792c956039e42b583a9dd49d95cc58c2eebf978d8ade396b632f08c115363",
+  "independentVerification": {
+    "codePresent": true,
+    "runtimeMatchesCompiledArtifactWithImmutable": true,
+    "usdc": "0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002",
+    "receiptContract": "0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df",
+    "minimumLiquidity": "1000",
+    "feeNumerator": "997",
+    "feeDenominator": "1000",
+    "reservePOT": "0",
+    "reserveUSDC": "0",
+    "totalLiquidityShares": "0"
+  }
+}

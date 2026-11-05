@@ -998,13 +998,14 @@ describe('Architecture A Activation & Storage Collateral Warning (SEC-03, SEC-04
 
     // Built-in canonical deployment constants remain intact and preserved
     expect(BUILTIN_DEPLOYMENT.pusdcAddress).toBe('0x6C3BD7AD92862bB321B34a2F2762E7F2B7824002');
-    expect(BUILTIN_DEPLOYMENT.ammAddress).toBe('0x407A2609dfd5336a38D6274B1EFc1804930f160A');
+    expect(BUILTIN_DEPLOYMENT.ammAddress).toBe('0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df');
 
     // Deactivate custom deployment and verify rollback
     deploymentService.deactivateCustomDeployment();
     expect(deploymentService.getActiveRegistryMode()).toBe('builtin');
     expect(CONTRACT_REGISTRY.testUSDC.deployedAddress).toBe(BUILTIN_DEPLOYMENT.pusdcAddress);
-    expect(CONTRACT_REGISTRY.nexusAMM.deployedAddress).toBe(BUILTIN_DEPLOYMENT.ammAddress);
+    expect(CONTRACT_REGISTRY.nexusAMM.deployedAddress).toBe('0x407A2609dfd5336a38D6274B1EFc1804930f160A');
+    expect(CONTRACT_REGISTRY.nexusAMMV2.deployedAddress).toBe(BUILTIN_DEPLOYMENT.ammAddress);
   });
 
   it('rejects activation if deployed bytecode is empty on-chain', async () => {

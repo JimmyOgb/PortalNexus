@@ -1,7 +1,7 @@
 /**
- * Minimal ABI encoding/decoding for the deployed Architecture A contracts.
+ * Minimal ABI encoding/decoding for the deployed active V2 AMM and pUSDC token.
  *
- * Signatures are taken from contracts/contracts/NexusAMMNative.sol and TestUSDCMin.sol.
+ * AMM signatures are shared by legacy NexusAMMNative v1 and active NexusAMMNativeV2.
  * Selectors were verified against ethers' keccak256 (see tests/liveIntegration.test.ts,
  * which re-derives them from the compiled Hardhat artifacts).
  */
@@ -14,7 +14,7 @@ export const SELECTORS = {
   allowance: '0xdd62ed3e', // allowance(address,address)
   balanceOf: '0x70a08231', // balanceOf(address) (pUSDC and AMM position count)
   totalSupply: '0x18160ddd', // totalSupply() -> uint256
-  // NexusAMMNative
+  // NexusAMMNativeV2 (shared selectors; legacy v1 retained for comparison only)
   getReserves: '0x0902f1ac', // getReserves() -> (uint256,uint256)
   totalLiquidityShares: '0x87cd5b20',
   usdc: '0x3e413bee', // usdc() -> address

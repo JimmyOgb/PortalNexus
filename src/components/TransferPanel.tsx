@@ -6,6 +6,7 @@ import { LIVE_DEPLOYMENT } from '../contracts/config';
 import { SELECTORS, encodeCall, isAddress } from '../contracts/abi';
 import { parseTokenAmount, formatTokenAmount } from '../services/contractMath';
 import { globalTxService } from '../services/transactionService';
+import { FEATURE_FLAGS } from '../services/featureFlags';
 import { globalSubstrateTransferService } from '../services/substrateTransferService';
 import { PORTALDOT_SUBSTRATE_CONSTANTS } from '../lib/substrateUtils';
 import { SendIcon, AlertIcon, CheckIcon, ExternalLinkIcon, RefreshIcon } from './Icons';
@@ -171,6 +172,10 @@ export const TransferPanel: React.FC<Props> = ({
   };
 
   const handleClaimFaucet = async () => {
+    if (!FEATURE_FLAGS.faucetClaim.enabled) {
+      setErrorMsg(FEATURE_FLAGS.faucetClaim.disabledReason || 'pUSDC faucet transactions are disabled in this release.');
+      return;
+    }
     if (!isEvmConnected || !evmWalletState.address || !isCorrectNetwork) {
       setErrorMsg('Connect EVM wallet on Portaldot V3 to claim testnet pUSDC.');
       return;
@@ -280,11 +285,11 @@ export const TransferPanel: React.FC<Props> = ({
             <button
               type="button"
               id="btn-claim-faucet"
-              disabled={isSubmitting || !isEvmConnected || !isCorrectNetwork}
+              disabled={!FEATURE_FLAGS.faucetClaim.enabled || isSubmitting || !isEvmConnected || !isCorrectNetwork}
               onClick={handleClaimFaucet}
               className="px-3 py-1.5 rounded-lg text-xs font-bold mono bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              Claim 10,000 pUSDC
+              {FEATURE_FLAGS.faucetClaim.enabled ? 'Claim 10,000 pUSDC' : 'Faucet Transactions Disabled'}
             </button>
           </div>
           <p className="text-[10px] text-slate-400 border-t border-cyan-500/20 pt-1.5 leading-relaxed">

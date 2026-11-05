@@ -51,16 +51,17 @@ export const FEATURE_FLAGS: FeatureFlagsConfig = {
     requiresWallet: true,
     requiresCorrectNetwork: true,
     statusLabel: 'ACTIVE',
-    description: 'Allows connected EVM wallet to deploy verified contracts (TestUSDCMin, WPotToken, NexusAMMNative).'
+    description: 'Allows user-confirmed deployment of supported source templates, including legacy AMM v1. Does not change the active V2 registry entry.'
   },
   faucetClaim: {
     id: 'faucetClaim',
     name: 'pUSDC Testnet Faucet Claim',
-    enabled: true,
+    enabled: false,
     requiresWallet: true,
     requiresCorrectNetwork: true,
-    statusLabel: 'ACTIVE',
-    description: 'Calls TestUSDCMin.faucetMint(recipient, amount) directly from the connected wallet.'
+    statusLabel: 'SAFETY_LOCKED',
+    description: 'Faucet submissions are disabled in this release.',
+    disabledReason: 'pUSDC faucet transactions are disabled in this release.'
   },
   tokenTransfer: {
     id: 'tokenTransfer',
@@ -74,39 +75,43 @@ export const FEATURE_FLAGS: FeatureFlagsConfig = {
   tokenApprove: {
     id: 'tokenApprove',
     name: 'pUSDC Token Approval',
-    enabled: true,
+    enabled: false,
     requiresWallet: true,
     requiresCorrectNetwork: true,
-    statusLabel: 'ACTIVE',
-    description: 'Authorizes exact pUSDC allowance for the NexusAMMNative pool without unlimited allowances.'
+    statusLabel: 'SAFETY_LOCKED',
+    description: 'AMM token approvals are disabled in this release.',
+    disabledReason: 'AMM token approvals are disabled in this release.'
   },
   ammAddLiquidity: {
     id: 'ammAddLiquidity',
     name: 'AMM Liquidity Provision',
-    enabled: true,
+    enabled: false,
     requiresWallet: true,
     requiresCorrectNetwork: true,
-    statusLabel: 'ACTIVE',
-    description: 'Submits payable Native POT + pUSDC liquidity to NexusAMMNative, minting an on-chain position NFT.'
+    statusLabel: 'SAFETY_LOCKED',
+    description: 'AMM liquidity submission is disabled in this release.',
+    disabledReason: 'AMM liquidity submission is disabled in this release.'
   },
   ammRemoveLiquidity: {
     id: 'ammRemoveLiquidity',
     name: 'AMM Liquidity Removal',
-    enabled: true,
+    enabled: false,
     requiresWallet: true,
     requiresCorrectNetwork: true,
-    statusLabel: 'ACTIVE',
-    description: 'Burns the user LP position NFT and withdraws proportional POT and pUSDC reserves.'
+    statusLabel: 'SAFETY_LOCKED',
+    description: 'AMM liquidity removal is disabled in this release.',
+    disabledReason: 'AMM liquidity removal is disabled in this release.'
   },
   ammSwap: {
     id: 'ammSwap',
     name: 'AMM Constant-Product Swap',
-    enabled: true, // Enabled when pool has liquidity; guarded dynamically when reserves are 0
+    enabled: false,
     requiresWallet: true,
     requiresCorrectNetwork: true,
     requiresNonZeroReserves: true,
-    statusLabel: 'CONDITIONAL',
-    description: 'Executes swapExactPOTForTokens or swapExactTokensForPOT. Requires seeded pool liquidity.'
+    statusLabel: 'SAFETY_LOCKED',
+    description: 'AMM swap submission is disabled in this release.',
+    disabledReason: 'AMM swap submission is disabled in this release.'
   },
   nativeEvmTransfer: {
     id: 'nativeEvmTransfer',

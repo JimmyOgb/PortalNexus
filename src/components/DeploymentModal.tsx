@@ -120,20 +120,20 @@ export const DeploymentModal: React.FC<Props> = ({
       setErrorMsg('Invalid USDC constructor address');
       return;
     }
-    setStatusMsg('Prompting wallet for NexusAMMNative deployment...');
+    setStatusMsg('Prompting wallet to deploy the legacy NexusAMMNative v1 template...');
     setIsProcessing(true);
     try {
       const res = await deploymentService.deployContractArtifact({
-        name: 'NexusAMMNative',
+        name: 'NexusAMMNative v1 (Legacy)',
         bytecode: NEXUS_AMM_NATIVE_BYTECODE,
         constructorArgsHex: encodeAddress(targetUsdc)
       });
       if (res.success && res.contractAddress) {
         setArchAammAddress(res.contractAddress);
         setArchAammTx(res.txHash || null);
-        setStatusMsg('NexusAMMNative successfully deployed & verified on-chain!');
+        setStatusMsg('Legacy NexusAMMNative v1 template successfully deployed & verified on-chain. It does not replace active V2.');
       } else {
-        setErrorMsg(res.error || 'Failed to deploy NexusAMMNative');
+        setErrorMsg(res.error || 'Failed to deploy legacy NexusAMMNative v1');
       }
     } catch (e: any) {
       setErrorMsg(e?.message || 'Deployment error');
@@ -363,7 +363,7 @@ export const DeploymentModal: React.FC<Props> = ({
           <div className="p-2.5 rounded-lg bg-black/40 border border-indigo-500/20 text-[10px] mono text-slate-300 space-y-1">
             <p className="text-indigo-300 font-bold">Empirical On-Chain Testnet Deposit Evidence (from deployment records):</p>
             <p>&bull; <strong>TestUSDCMin:</strong> ~127 POT locked as byte/item storage collateral</p>
-            <p>&bull; <strong>NexusAMMNative:</strong> ~280 POT locked as byte/item storage collateral</p>
+            <p>&bull; <strong>Legacy NexusAMMNative v1 template:</strong> ~280 POT estimated byte/item storage collateral</p>
             <p>&bull; <strong>Architecture A Total:</strong> ~408 POT total collateral required</p>
             <p>&bull; <strong>Architecture B (4 contracts):</strong> ~1,091 POT total collateral estimate</p>
           </div>
@@ -492,21 +492,21 @@ export const DeploymentModal: React.FC<Props> = ({
               )}
             </div>
 
-            {/* Step 2: NexusAMMNative */}
+            {/* Step 2: legacy NexusAMMNative v1 template */}
             <div className={`p-4 rounded-xl border transition ${
               archAammAddress ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-white/[0.02] border-white/10'
             }`}>
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="font-semibold text-sm text-white flex items-center gap-2">
-                    <span>2. NexusAMMNative.sol</span>
+                    <span>2. Legacy NexusAMMNative v1 template</span>
                     {archAammAddress && (
                       <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 mono">
                         ✓ Deployed &amp; Verified
                       </span>
                     )}
                   </h4>
-                  <p className="text-xs text-slate-400">Constant-product native POT / pUSDC pair (no wrapping)</p>
+                  <p className="text-xs text-slate-400">Legacy constant-product template; its deployed v1 bytecode ignores initial minimums. V2 is the active pool.</p>
                 </div>
 
                 {!archAammAddress ? (

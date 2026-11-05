@@ -1,13 +1,13 @@
 /**
  * Live read layer + transaction PREPARATION for Architecture A
- * (NexusAMMNative native POT / pUSDC pool + TestUSDCMin).
+ * (NexusAMMNativeV2 native POT / pUSDC pool + TestUSDCMin).
  *
  * This module never signs or sends anything. Prepared transactions are plain
  * {to, data, value} objects shown to the user for review; broadcasting is gated
  * separately by TX_SUBMISSION_ENABLED in the UI.
  */
 
-import { LIVE_DEPLOYMENT } from '../contracts/config';
+import { AMM_DEPLOYMENT_STATUS, LIVE_DEPLOYMENT } from '../contracts/config';
 import {
   SELECTORS,
   LIQUIDITY_ADDED_TOPIC0,
@@ -141,6 +141,29 @@ export function isPoolEmpty(r: PoolReserves | null): boolean {
   return !!r && (r.reservePot === 0n || r.reserveUsdc === 0n || r.totalShares === 0n);
 }
 
+export function assertSafeInitialLiquidityTarget(poolEmpty: boolean, targetAddress: string): void {
+  if (poolEmpty && targetAddress.toLowerCase() === AMM_DEPLOYMENT_STATUS.legacy.address.toLowerCase()) {
+    throw new Error('Initial liquidity is blocked for legacy v1: its deployed bytecode ignores initial minimums. Use the separately deployed and verified V2.');
+  }
+}
+
+/** Fail closed if a review was prepared from reserves that have since changed. */
+export function assertPoolStateFresh(expected: PoolReserves, current: PoolReserves): void {
+  if (
+    expected.reservePot !== current.reservePot ||
+    expected.reserveUsdc !== current.reserveUsdc ||
+    expected.totalShares !== current.totalShares
+  ) {
+    throw new Error('Pool state changed since the quote. Refresh and review the transaction again.');
+  }
+}
+
+/** Read-only exact-call simulation immediately before requesting wallet confirmation. */
+export async function simulatePreparedTransaction(rpc: RpcCall, tx: PreparedTx, from: string): Promise<string> {
+  if (!isAddress(from)) throw new Error('Invalid simulation sender');
+  return rpc('eth_call', [{ from, to: tx.to, data: tx.data, value: tx.valueHex }, 'latest']);
+}
+
 // ---------------------------------------------------------------- validation
 
 export type ParseResult = { ok: true; value: bigint } | { ok: false; error: string };
@@ -173,7 +196,7 @@ export function deadlineFrom(nowSec: number, minutes: number): bigint {
   return BigInt(nowSec + minutes * 60);
 }
 
-// ---------------------------------------------------------------- swap math (mirrors NexusAMMNative)
+// ---------------------------------------------------------------- swap math (mirrors active NexusAMMNativeV2)
 
 export function swapOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): bigint {
   if (amountIn <= 0n) throw new Error('Amount must be greater than zero');
@@ -208,7 +231,7 @@ export function isqrt(y: bigint): bigint {
   return z;
 }
 
-/** Mirrors NexusAMMNative.addLiquidity. potIn is msg.value, usdcDesired is the approved pUSDC amount. */
+/** Mirrors NexusAMMNativeV2.addLiquidity. potIn is msg.value, usdcDesired is the approved pUSDC amount. */
 export function quoteAddLiquidity(potIn: bigint, usdcDesired: bigint, r: PoolReserves, slippageBps: number): AddLiquidityQuote {
   if (potIn <= 0n || usdcDesired <= 0n) throw new Error('Both amounts must be greater than zero');
   if (isPoolEmpty(r)) {
@@ -220,8 +243,10 @@ export function quoteAddLiquidity(potIn: bigint, usdcDesired: bigint, r: PoolRes
       amountUsdc: usdcDesired,
       refundPot: 0n,
       shares: root - 1000n,
-      minPot: 0n,
-      minUsdc: 0n,
+      // The legacy deployed contract ignores these during initialisation. The
+      // frontend still prepares meaningful bounds for corrected deployments.
+      minPot: applySlippageDown(potIn, slippageBps),
+      minUsdc: applySlippageDown(usdcDesired, slippageBps),
     };
   }
   let amountPot = potIn;

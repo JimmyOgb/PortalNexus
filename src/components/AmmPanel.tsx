@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { EvmRpcClient } from '../services/evmRpc';
 import { EvmWalletService, EvmWalletState, PORTALDOT_EXPLORER_URL } from '../services/evmWallet';
 import { formatTokenAmount } from '../services/contractMath';
-import { LIVE_DEPLOYMENT, NETWORK_CONFIG } from '../contracts/config';
+import { AMM_DEPLOYMENT_STATUS, LIVE_DEPLOYMENT, NETWORK_CONFIG } from '../contracts/config';
 import { globalTxService } from '../services/transactionService';
 import { FeatureFlagsConfig } from '../services/featureFlags';
 import { ExternalLinkIcon, RefreshIcon, CheckIcon, AlertIcon } from './Icons';
 import {
   PoolReserves,
+  TX_SUBMISSION_ENABLED,
   LpPosition,
   PreparedTx,
   readReserves,
@@ -22,6 +23,9 @@ import {
   applySlippageDown,
   swapOut,
   quoteAddLiquidity,
+  assertSafeInitialLiquidityTarget,
+  assertPoolStateFresh,
+  simulatePreparedTransaction,
   deadlineFrom,
   prepareFaucetMint,
   prepareApprove,
@@ -214,6 +218,19 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
         if (!pu.ok) return { error: addUsdc ? pu.error : undefined } as R;
         const q = quoteAddLiquidity(pp.value, pu.value, r, slippageBps);
         const deadline = deadlineFrom(nowSec, deadlineMin);
+        try {
+          assertSafeInitialLiquidityTarget(q.isFirstDeposit, LIVE_DEPLOYMENT.ammAddress);
+        } catch {
+          return {
+            error: 'Initial liquidity is blocked for legacy v1: its deployed bytecode ignores initial minimums. The separately deployed and verified V2 is the active pool.',
+            warnings: ['This is a contract limitation. Frontend checks and transaction ordering cannot eliminate the legacy deployment race.'],
+            lines: [
+              ['Proposed initial price', `${fmtUsdc(pu.value)} pUSDC / ${fmtPot(pp.value)} POT`],
+              ['Minimum contributions', `${fmtPot(q.minPot)} POT / ${fmtUsdc(q.minUsdc)} pUSDC`],
+              ['LP shares (estimate)', q.shares.toString()],
+            ],
+          } as R;
+        }
         let balErr: string | undefined;
         if (data.potBalance !== null && pp.value > data.potBalance) balErr = 'Amount exceeds your POT balance';
         if (data.usdcBalance !== null && q.amountUsdc > data.usdcBalance) balErr = 'Amount exceeds your pUSDC balance';
@@ -236,7 +253,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
             ['pUSDC deposited (estimate)', `${fmtUsdc(q.amountUsdc)} pUSDC`],
             ['POT refunded by contract', `${fmtPot(q.refundPot)} POT`],
             ['LP shares minted (estimate)', q.shares.toString()],
-            ['Minimum POT / pUSDC', q.isFirstDeposit ? 'n/a (first deposit)' : `${fmtPot(q.minPot)} / ${fmtUsdc(q.minUsdc)}`],
+            ['Minimum POT / pUSDC', `${fmtPot(q.minPot)} / ${fmtUsdc(q.minUsdc)}`],
             ['Deadline', `${deadlineMin} min (unix ${deadline})`],
           ],
           txs,
@@ -280,7 +297,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
     : null;
 
   const handleExecute = async () => {
-    if (!evmWallet || !review.txs || review.txs.length === 0 || !wallet.address || !wallet.isCorrectNetwork) return;
+    if (!TX_SUBMISSION_ENABLED || !evmWallet || !review.txs || review.txs.length === 0 || !wallet.address || !wallet.isCorrectNetwork) return;
     setIsExecuting(true);
     setExecError(null);
     setExecSuccess(null);
@@ -289,6 +306,12 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
     try {
       for (let i = 0; i < review.txs.length; i++) {
         const tx = review.txs[i];
+        if (mode === 'add' || mode === 'swap' || mode === 'remove') {
+          const currentReserves = await readReserves(rpc);
+          assertPoolStateFresh(data!.reserves, currentReserves);
+        }
+        setExecStatus(`Step ${i + 1} of ${review.txs.length}: Simulating exact transaction...`);
+        await simulatePreparedTransaction(rpc, tx, wallet.address);
         setExecStatus(`Step ${i + 1} of ${review.txs.length}: Authorizing "${tx.label}" in wallet...`);
 
         const featureId: keyof FeatureFlagsConfig =
@@ -299,6 +322,9 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
 
         const res = await globalTxService.executeEvmTx(featureId, tx, evmWallet, { hasLiquidity: !empty });
         setExecTxHash(res.txHash || null);
+        if (res.status !== 'CONFIRMED') {
+          throw new Error(res.error || `Transaction ${res.status.toLowerCase()}; stopped before the next step.`);
+        }
       }
       setExecSuccess('Transaction confirmed on Portaldot V3 Testnet!');
       setRefreshTick(t => t + 1);
@@ -313,6 +339,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
   const isButtonDisabled =
     !connected ||
     wrongNetwork ||
+    !TX_SUBMISSION_ENABLED ||
     isExecuting ||
     !!review.error ||
     !review.txs ||
@@ -321,6 +348,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
 
   const getButtonText = () => {
     if (isExecuting) return 'Processing in Wallet…';
+    if (!TX_SUBMISSION_ENABLED) return 'AMM Transaction Submission Disabled';
     if (!connected) return 'Wallet Disconnected — Connect EVM Wallet to Submit';
     if (wrongNetwork) return `Unsupported Network — Switch to Portaldot V3 (${NETWORK_CONFIG.chainIdDec})`;
     if (mode === 'swap' && empty) return 'Pool Has 0 Reserves — Add Liquidity First';
@@ -358,10 +386,14 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
         ⚠ {LIVE_DEPLOYMENT.tokenDisclosure}
       </div>
 
+      <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-200">
+        {`Active target: ${AMM_DEPLOYMENT_STATUS.correctedV2.version} (${AMM_DEPLOYMENT_STATUS.correctedV2.address}). ${AMM_DEPLOYMENT_STATUS.correctedV2.status} Legacy v1 (${AMM_DEPLOYMENT_STATUS.legacy.address}) is retained for history; ${AMM_DEPLOYMENT_STATUS.legacy.status}`}
+      </div>
+
       {/* Verified Architecture A Deployment Summary */}
       <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-[11px] mono space-y-1">
         <div className="flex justify-between gap-2">
-          <span className="text-slate-400">NexusAMMNative (Block #{LIVE_DEPLOYMENT.ammDeployBlock})</span>
+          <span className="text-slate-400">{AMM_DEPLOYMENT_STATUS.correctedV2.version} (Block #{LIVE_DEPLOYMENT.ammDeployBlock})</span>
           <span className="text-cyan-300 truncate">{LIVE_DEPLOYMENT.ammAddress}</span>
         </div>
         <div className="flex justify-between gap-2">
@@ -440,7 +472,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
               ℹ️ Architecture A LP Position Disclosure: Non-Transferable (Soulbound)
             </p>
             <p className="text-[11px] text-purple-300/80 leading-relaxed">
-              In Architecture A (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
+              In legacy Architecture A v1 (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
             </p>
           </div>
           <div className="space-y-2">
@@ -456,7 +488,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
               ℹ️ Architecture A LP Position Disclosure: Non-Transferable (Soulbound)
             </p>
             <p className="text-[11px] text-purple-300/80 leading-relaxed">
-              In Architecture A (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
+              In legacy Architecture A v1 (<code>NexusAMMNative.sol</code>), liquidity positions are tied directly to your depositor address. The contract does not implement ERC-721 transfer functions (<code>transferFrom</code>/<code>safeTransferFrom</code>). Underlying reserves can only be redeemed by the original depositor calling <code>removeLiquidity</code>. (Contrast with Architecture B's separate transferable <code>NexusLPReceipt.sol</code>).
             </p>
           </div>
           <div className="space-y-2 text-xs mono">
@@ -540,7 +572,7 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
       )}
 
       {/* Main Review Lines */}
-      {review.lines && !review.error && (
+      {review.lines && (
         <div id="review" className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs mono space-y-1.5">
           <p className="text-slate-300 font-semibold">Transaction Review &amp; Gas Estimates</p>
           {review.lines.map(([k, v]) => (

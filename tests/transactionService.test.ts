@@ -23,8 +23,25 @@ describe('TransactionService — User-Approved Transaction Manager', () => {
   it('rejects execution if feature permission is not granted (e.g. Disconnected)', async () => {
     // Wallet is disconnected by default
     await expect(
-      txService.executeEvmTx('faucetClaim', sampleTx, mockEvmWallet)
+      txService.executeEvmTx('nativeEvmTransfer', sampleTx, mockEvmWallet)
     ).rejects.toThrow(/Connect wallet to proceed/);
+  });
+
+  it('refuses faucet submission before invoking the wallet when the faucet is safety-locked', async () => {
+    vi.spyOn(mockEvmWallet, 'getState').mockReturnValue({
+      isConnected: true,
+      isConnecting: false,
+      address: '0x1111111111111111111111111111111111111111',
+      chainId: 420420777,
+      isCorrectNetwork: true,
+      balancePot: '10.0',
+      balanceWei: '10000000000000000000',
+      error: null
+    });
+    const send = vi.spyOn(mockEvmWallet, 'sendTransaction');
+    await expect(txService.executeEvmTx('faucetClaim', sampleTx, mockEvmWallet))
+      .rejects.toThrow(/faucet transactions are disabled in this release/i);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('rejects cross-VM bridge execution as disabled by safety controls', async () => {
@@ -71,7 +88,7 @@ describe('TransactionService — User-Approved Transaction Manager', () => {
       if (active) statesRecorded.push(active.status);
     });
 
-    const result = await txService.executeEvmTx('faucetClaim', sampleTx, mockEvmWallet);
+    const result = await txService.executeEvmTx('nativeEvmTransfer', sampleTx, mockEvmWallet);
 
     expect(result.status).toBe('CONFIRMED');
     expect(result.txHash).toBe(dummyTxHash);
@@ -101,7 +118,7 @@ describe('TransactionService — User-Approved Transaction Manager', () => {
     vi.spyOn(mockEvmWallet, 'sendTransaction').mockRejectedValue(rejectionError);
 
     await expect(
-      txService.executeEvmTx('faucetClaim', sampleTx, mockEvmWallet)
+      txService.executeEvmTx('nativeEvmTransfer', sampleTx, mockEvmWallet)
     ).rejects.toThrow(/User rejected the request/);
 
     expect(txService.getHistory().length).toBe(1);
@@ -129,7 +146,7 @@ describe('TransactionService — User-Approved Transaction Manager', () => {
       gasUsed: '0x5208'
     });
 
-    const result = await txService.executeEvmTx('faucetClaim', sampleTx, mockEvmWallet);
+    const result = await txService.executeEvmTx('nativeEvmTransfer', sampleTx, mockEvmWallet);
 
     expect(result.status).toBe('REVERTED');
     expect(result.error).toContain('Transaction reverted on-chain');

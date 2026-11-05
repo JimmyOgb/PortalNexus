@@ -29,6 +29,13 @@ describe('Stage 4.1: Contract Registry & Inspection Service', () => {
       expect(entry.abi?.length).toBeGreaterThan(0);
     });
 
+    it('keeps the legacy AMM and corrected V2 separately labeled in the contract registry', () => {
+      expect(CONTRACT_REGISTRY.nexusAMM.deployedAddress).toBe('0x407A2609dfd5336a38D6274B1EFc1804930f160A');
+      expect(CONTRACT_REGISTRY.nexusAMMV2.deployedAddress).toBe('0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df');
+      expect(CONTRACT_REGISTRY.nexusAMMV2.isDeployed).toBe(true);
+      expect(CONTRACT_REGISTRY.nexusAMMV2.statusText).toContain('independently verified');
+    });
+
     it('exposes canonical PORTAL_TEST_STORAGE_DEPLOYMENT constants matching on-chain receipt', () => {
       expect(PORTAL_TEST_STORAGE_DEPLOYMENT.id).toBe('portalTestStorage');
       expect(PORTAL_TEST_STORAGE_DEPLOYMENT.address).toBe(verifiedAddress);
@@ -82,11 +89,12 @@ describe('Stage 4.1: Contract Registry & Inspection Service', () => {
 
     it('lists all registered contracts including PortalTestStorage and Architecture A', () => {
       const list = contractInspectionService.listRegisteredContracts();
-      expect(list.length).toBe(5);
+      expect(list.length).toBe(6);
       const ids = list.map((c) => c.id);
       expect(ids).toContain('portalTestStorage');
       expect(ids).toContain('testUSDC');
       expect(ids).toContain('nexusAMM');
+      expect(ids).toContain('nexusAMMV2');
       expect(ids).toContain('nexusReceipt');
       expect(ids).toContain('wpot');
     });
@@ -244,6 +252,6 @@ describe('Stage 4.1: Contract Registry & Inspection Service', () => {
       expect(inspection.creator?.toLowerCase()).toBe(deployerAddress.toLowerCase());
       expect(inspection.isVerified).toBe(true);
       expect(inspection.verificationError).toBeUndefined();
-    }, 15000);
+    }, 30000);
   });
 });

@@ -842,7 +842,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                   </div>
                   <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 text-[11px] space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-semibold text-white">NexusAMMNative (Native POT / pUSDC)</span>
+                      <span className="font-semibold text-white">NexusAMMNativeV2 (Native POT / pUSDC)</span>
                       <span className="text-[10px] text-emerald-400">Block #{LIVE_DEPLOYMENT.ammDeployBlock}</span>
                     </div>
                     <div className="text-slate-400 truncate">{LIVE_DEPLOYMENT.ammAddress}</div>
