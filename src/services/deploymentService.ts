@@ -19,7 +19,7 @@ import {
   TEST_USDC_BYTECODE,
   NEXUS_AMM_BYTECODE
 } from '../contracts/deploymentData';
-import { CONTRACT_REGISTRY, BUILTIN_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT } from '../contracts/config';
+import { CONTRACT_REGISTRY, BUILTIN_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT, ACTIVE_AMM_V3_DEPLOYMENT } from '../contracts/config';
 import { isAddress } from '../contracts/abi';
 import { encodeConstructorArgs, ConstructorParam } from '../lib/abiEncoder';
 import { checkFeaturePermission } from './featureFlags';
@@ -745,11 +745,15 @@ export class DeploymentService {
     CONTRACT_REGISTRY.nexusAMM.isDeployed = true;
 
     CONTRACT_REGISTRY.nexusAMMV2.deployedAddress = CORRECTED_AMM_V2_DEPLOYMENT.address;
-    CONTRACT_REGISTRY.nexusAMMV2.statusText = 'Deployed and independently verified on Portaldot V3 Testnet (Block #333609)';
+    CONTRACT_REGISTRY.nexusAMMV2.statusText = 'Legacy V2 verified on Portaldot V3 Testnet (Block #333609)';
     CONTRACT_REGISTRY.nexusAMMV2.isDeployed = true;
 
-    CONTRACT_REGISTRY.nexusReceipt.deployedAddress = CORRECTED_AMM_V2_DEPLOYMENT.address;
-    CONTRACT_REGISTRY.nexusReceipt.statusText = 'Verified on Portaldot V3 Testnet (V2 unified AMM authority)';
+    CONTRACT_REGISTRY.nexusAMMV3.deployedAddress = ACTIVE_AMM_V3_DEPLOYMENT.address;
+    CONTRACT_REGISTRY.nexusAMMV3.statusText = 'Active AMM deployed and independently verified on Portaldot V3 Testnet (Block #340425)';
+    CONTRACT_REGISTRY.nexusAMMV3.isDeployed = true;
+
+    CONTRACT_REGISTRY.nexusReceipt.deployedAddress = ACTIVE_AMM_V3_DEPLOYMENT.address;
+    CONTRACT_REGISTRY.nexusReceipt.statusText = 'Verified on Portaldot V3 Testnet (V3 unified AMM authority)';
     CONTRACT_REGISTRY.nexusReceipt.isDeployed = true;
 
     CONTRACT_REGISTRY.wpot.deployedAddress = null;

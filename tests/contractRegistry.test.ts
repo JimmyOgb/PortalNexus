@@ -87,14 +87,15 @@ describe('Stage 4.1: Contract Registry & Inspection Service', () => {
       expect(unknown).toBeNull();
     });
 
-    it('lists all registered contracts including PortalTestStorage and Architecture A', () => {
+    it('lists all registered contracts including PortalTestStorage, Architecture A, and V3 AMM', () => {
       const list = contractInspectionService.listRegisteredContracts();
-      expect(list.length).toBe(6);
+      expect(list.length).toBe(7);
       const ids = list.map((c) => c.id);
       expect(ids).toContain('portalTestStorage');
       expect(ids).toContain('testUSDC');
       expect(ids).toContain('nexusAMM');
       expect(ids).toContain('nexusAMMV2');
+      expect(ids).toContain('nexusAMMV3');
       expect(ids).toContain('nexusReceipt');
       expect(ids).toContain('wpot');
     });

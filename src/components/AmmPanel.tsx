@@ -386,14 +386,14 @@ export const AmmPanel: React.FC<Props> = ({ evmClient, wallet, evmWallet }) => {
         ⚠ {LIVE_DEPLOYMENT.tokenDisclosure}
       </div>
 
-      <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] text-rose-200">
-        {`Active target: ${AMM_DEPLOYMENT_STATUS.correctedV2.version} (${AMM_DEPLOYMENT_STATUS.correctedV2.address}). ${AMM_DEPLOYMENT_STATUS.correctedV2.status} Legacy v1 (${AMM_DEPLOYMENT_STATUS.legacy.address}) is retained for history; ${AMM_DEPLOYMENT_STATUS.legacy.status}`}
+      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-[11px] text-purple-200">
+        {`Active target: ${AMM_DEPLOYMENT_STATUS.activeV3.version} (${LIVE_DEPLOYMENT.ammAddress}). ${AMM_DEPLOYMENT_STATUS.activeV3.status} Legacy V2 (${AMM_DEPLOYMENT_STATUS.legacyV2.address}) and v1 (${AMM_DEPLOYMENT_STATUS.legacy.address}) are retained for history.`}
       </div>
 
       {/* Verified Architecture A Deployment Summary */}
       <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-[11px] mono space-y-1">
         <div className="flex justify-between gap-2">
-          <span className="text-slate-400">{AMM_DEPLOYMENT_STATUS.correctedV2.version} (Block #{LIVE_DEPLOYMENT.ammDeployBlock})</span>
+          <span className="text-slate-400">{AMM_DEPLOYMENT_STATUS.activeV3.version} (Block #{LIVE_DEPLOYMENT.ammDeployBlock})</span>
           <span className="text-cyan-300 truncate">{LIVE_DEPLOYMENT.ammAddress}</span>
         </div>
         <div className="flex justify-between gap-2">

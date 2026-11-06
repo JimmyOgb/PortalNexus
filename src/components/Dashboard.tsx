@@ -7,7 +7,7 @@ import { SubstrateChainState, EvmChainState, BlockComparisonSample } from '../ty
 import type { CameraMode } from './ThreeCanvas';
 import { EvmWalletService, EvmWalletState, PORTALDOT_EXPLORER_URL } from '../services/evmWallet';
 import { SubstrateWalletService, SubstrateWalletState } from '../services/substrateWallet';
-import { NETWORK_CONFIG, PORTAL_TEST_STORAGE_DEPLOYMENT, LIVE_DEPLOYMENT } from '../contracts/config';
+import { NETWORK_CONFIG, PORTAL_TEST_STORAGE_DEPLOYMENT, LIVE_DEPLOYMENT, AMM_DEPLOYMENT_STATUS } from '../contracts/config';
 import { contractInspectionService, PortalTestStorageInspection } from '../services/contractInspectionService';
 import { AmmPanel } from './AmmPanel';
 import { TransferPanel } from './TransferPanel';
@@ -235,7 +235,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
           <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
             
             {/* Brand Logo */}
-            <div className="flex items-center gap-3">
+            <div className="header-action-row flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 via-cyan-500 to-purple-600 p-[1.5px]">
                 <div className="w-full h-full bg-gray-950 rounded-[10px] flex items-center justify-center">
                   <span className="font-bold text-lg text-gradient">PN</span>
@@ -281,7 +281,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
               <button
                 id="btn-substrate"
                 onClick={handleConnectSubstrate}
-                className="px-3.5 py-2 rounded-xl text-xs mono font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-2"
+                className="header-action-button px-3.5 py-2 rounded-xl text-xs mono font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-2"
                 title={substrateWalletState.error || 'Connect Substrate extension'}
               >
                 <span className={`w-2 h-2 rounded-full ${substrateWalletState.isConnected ? 'bg-emerald-400' : 'bg-slate-500'}`} />
@@ -296,7 +296,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
               <button
                 id="btn-evm"
                 onClick={handleConnectEvm}
-                className={`px-3.5 py-2 rounded-xl text-xs mono font-medium border transition flex items-center gap-2 ${
+                className={`header-action-button px-3.5 py-2 rounded-xl text-xs mono font-medium border transition flex items-center gap-2 ${
                   evmWalletState.isConnected && !evmWalletState.isCorrectNetwork
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
                     : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
@@ -317,7 +317,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
               <button
                 id="btn-deploy-modal"
                 onClick={() => setShowDeployModal(true)}
-                className="px-3 py-2 rounded-xl text-xs mono font-semibold bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 text-emerald-300 border border-emerald-500/40 transition flex items-center gap-1.5"
+                className="header-action-button px-3 py-2 rounded-xl text-xs mono font-semibold bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 text-emerald-300 border border-emerald-500/40 transition flex items-center gap-1.5"
                 title="Open Portaldot V3 Testnet Contract Deployment Modal"
               >
                 <span>🚀</span>
@@ -327,7 +327,7 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
               {/* Reduced Motion Toggle */}
               <button
                 onClick={() => setReducedMotion(!reducedMotion)}
-                className="px-2.5 py-2 rounded-xl text-xs mono bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition"
+                className="header-action-button px-2.5 py-2 rounded-xl text-xs mono bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition"
                 title={reducedMotion ? 'Enable 3D animation' : 'Reduce 3D motion'}
               >
                 {reducedMotion ? '▶ Motion' : '⏸ Pause'}
@@ -839,10 +839,11 @@ export const Dashboard: React.FC<Props> = ({ substrateClient, evmClient }) => {
                   </div>
                   <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 text-[11px] space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="font-semibold text-white">NexusAMMNativeV2 (Native POT / pUSDC)</span>
+                      <span className="font-semibold text-white">{AMM_DEPLOYMENT_STATUS.activeV3.version} (Active · Native POT / pUSDC)</span>
                       <span className="text-[10px] text-emerald-400">Block #{LIVE_DEPLOYMENT.ammDeployBlock}</span>
                     </div>
                     <div className="text-slate-400 truncate">{LIVE_DEPLOYMENT.ammAddress}</div>
+                    <div className="text-slate-500 truncate">Legacy V2: {AMM_DEPLOYMENT_STATUS.legacyV2.address}</div>
                   </div>
                 </div>
               </div>

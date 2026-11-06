@@ -12,15 +12,17 @@ describe('UI Safety Guards & Verified Testnet Deployment Barrier', () => {
     expect(CONTRACT_REGISTRY.testUSDC.isDeployed).toBe(true);
     expect(CONTRACT_REGISTRY.testUSDC.statusText).toContain('Verified on Portaldot V3 Testnet');
 
-    // V1 remains listed as legacy; active AMM V2 is separately registered.
+    // V1 remains listed as legacy; V2 is legacy corrected; V3 is active AMM.
     expect(CONTRACT_REGISTRY.nexusAMM.deployedAddress).toBe('0x407A2609dfd5336a38D6274B1EFc1804930f160A');
     expect(CONTRACT_REGISTRY.nexusAMM.isDeployed).toBe(true);
     expect(CONTRACT_REGISTRY.nexusAMM.statusText).toContain('Legacy v1');
     expect(CONTRACT_REGISTRY.nexusAMMV2.deployedAddress).toBe('0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df');
     expect(CONTRACT_REGISTRY.nexusAMMV2.isDeployed).toBe(true);
+    expect(CONTRACT_REGISTRY.nexusAMMV3.deployedAddress).toBe('0x32E4b957eCf8Dee9f52204b0B6136fF8E8F8B1E5');
+    expect(CONTRACT_REGISTRY.nexusAMMV3.isDeployed).toBe(true);
 
-    // NexusReceipt is unified inside NexusAMMNative
-    expect(CONTRACT_REGISTRY.nexusReceipt.deployedAddress).toBe('0x9c01D8C8E5c04079AfaB9d3eF95895f5350F01Df');
+    // NexusReceipt is unified inside active NexusAMMNativeV3
+    expect(CONTRACT_REGISTRY.nexusReceipt.deployedAddress).toBe('0x32E4b957eCf8Dee9f52204b0B6136fF8E8F8B1E5');
     expect(CONTRACT_REGISTRY.nexusReceipt.isDeployed).toBe(true);
     expect(CONTRACT_REGISTRY.nexusReceipt.statusText).toContain('Verified on Portaldot V3 Testnet');
   });

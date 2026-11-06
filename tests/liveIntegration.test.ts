@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { SELECTORS, LIQUIDITY_ADDED_TOPIC0, decodeWords } from '../src/contracts/abi';
-import { LIVE_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT } from '../src/contracts/config';
+import { LIVE_DEPLOYMENT, LEGACY_AMM_DEPLOYMENT, CORRECTED_AMM_V2_DEPLOYMENT, ACTIVE_AMM_V3_DEPLOYMENT } from '../src/contracts/config';
 import {
   readReserves, readPusdcBalance, readPusdcTotalSupply, readLpPositions, isPoolEmpty,
   needsPusdcApproval, parseAmountStrict, quoteAddLiquidity, swapOut, applySlippageDown, deadlineFrom,
@@ -214,7 +214,7 @@ describe('math, validation and failure states', () => {
     expect(needsPusdcApproval(0n, 0n)).toBe(false);
   });
 
-  it('matches deployment-receipt-arch-a.json addresses, blocks, and tx hashes', () => {
+  it('matches recorded Architecture A and active V3 deployment addresses, blocks, and tx hashes', () => {
     const receipt = JSON.parse(readFileSync('contracts/deployment-receipt-arch-a.json', 'utf8'));
     expect(LIVE_DEPLOYMENT.pusdcAddress).toBe(receipt.contracts.testUSDC.address);
     expect(LIVE_DEPLOYMENT.pusdcDeployBlock).toBe(receipt.contracts.testUSDC.blockNumber);
@@ -223,10 +223,13 @@ describe('math, validation and failure states', () => {
     expect(LEGACY_AMM_DEPLOYMENT.blockNumber).toBe(receipt.contracts.nexusAMM.blockNumber);
     expect(LEGACY_AMM_DEPLOYMENT.txHash).toBe(receipt.contracts.nexusAMM.txHash);
     const v2 = JSON.parse(readFileSync('contracts/deployment-receipt-amm-v2.json', 'utf8'));
-    expect(LIVE_DEPLOYMENT.ammAddress).toBe(v2.contractAddress);
-    expect(LIVE_DEPLOYMENT.ammDeployBlock).toBe(v2.blockNumber);
-    expect(LIVE_DEPLOYMENT.ammDeployTxHash).toBe(v2.transactionHash);
     expect(CORRECTED_AMM_V2_DEPLOYMENT.address).toBe(v2.contractAddress);
+    expect(ACTIVE_AMM_V3_DEPLOYMENT.address).toBe('0x32E4b957eCf8Dee9f52204b0B6136fF8E8F8B1E5');
+    expect(ACTIVE_AMM_V3_DEPLOYMENT.blockNumber).toBe(340425);
+    expect(ACTIVE_AMM_V3_DEPLOYMENT.txHash).toBe('0xd692effa528d6284a950d56e93b0c2016eaf14efeb7530c212d74f5d9a17a1a3');
+    expect(LIVE_DEPLOYMENT.ammAddress).toBe(ACTIVE_AMM_V3_DEPLOYMENT.address);
+    expect(LIVE_DEPLOYMENT.ammDeployBlock).toBe(ACTIVE_AMM_V3_DEPLOYMENT.blockNumber);
+    expect(LIVE_DEPLOYMENT.ammDeployTxHash).toBe(ACTIVE_AMM_V3_DEPLOYMENT.txHash);
     expect(LIVE_DEPLOYMENT.deployerAddress).toBe(receipt.deployer);
   });
 });

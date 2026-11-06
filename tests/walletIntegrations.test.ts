@@ -175,6 +175,224 @@ describe('EvmWalletService', () => {
     expect(service.getState().isConnected).toBe(false);
     expect(service.getState().address).toBeNull();
   });
+
+  it('handles late wallet injection via window.ethereum on connect()', async () => {
+    const originalWindow = (globalThis as any).window;
+    try {
+      (globalThis as any).window = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      };
+      const service = new EvmWalletService();
+      expect(service.getProvider()).toBeNull();
+
+      // Later injection occurs:
+      const lateProvider = {
+        request: vi.fn().mockImplementation(({ method }) => {
+          if (method === 'eth_requestAccounts') return Promise.resolve(['0x9999999999999999999999999999999999999999']);
+          if (method === 'eth_chainId') return Promise.resolve(PORTALDOT_CHAIN_ID_HEX);
+          if (method === 'eth_getBalance') return Promise.resolve('0x0');
+          return Promise.resolve(null);
+        })
+      };
+      (globalThis as any).window.ethereum = lateProvider;
+
+      const success = await service.connect();
+      expect(success).toBe(true);
+      expect(service.getState().isConnected).toBe(true);
+      expect(service.getState().address).toBe('0x9999999999999999999999999999999999999999');
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
+
+  it('handles late wallet injection via EIP-6963 announceProvider event', async () => {
+    const listeners: Record<string, EventListener> = {};
+    const mockWindow = {
+      addEventListener: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+      removeEventListener: vi.fn((event) => {
+        delete listeners[event];
+      }),
+      dispatchEvent: vi.fn(),
+      localStorage: {
+        getItem: vi.fn(),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      }
+    };
+
+    const originalWindow = (globalThis as any).window;
+    try {
+      (globalThis as any).window = mockWindow;
+      const service = new EvmWalletService();
+      expect(mockWindow.addEventListener).toHaveBeenCalledWith('eip6963:announceProvider', expect.any(Function));
+
+      // Simulate EIP-6963 announcement
+      const mockProvider = {
+        request: vi.fn().mockImplementation(({ method }) => {
+          if (method === 'eth_requestAccounts') return Promise.resolve(['0x7777777777777777777777777777777777777777']);
+          if (method === 'eth_chainId') return Promise.resolve(PORTALDOT_CHAIN_ID_HEX);
+          if (method === 'eth_getBalance') return Promise.resolve('0x0');
+          return Promise.resolve(null);
+        })
+      };
+
+      const announceEvent = {
+        detail: {
+          info: { uuid: 'test-uuid-1', name: 'Test Wallet', icon: 'icon.png', rdns: 'io.test.wallet' },
+          provider: mockProvider
+        }
+      } as unknown as Event;
+
+      listeners['eip6963:announceProvider'](announceEvent);
+      expect(service.getDiscoveredProviders()).toHaveLength(1);
+
+      const success = await service.connect();
+      expect(success).toBe(true);
+      expect(service.getState().address).toBe('0x7777777777777777777777777777777777777777');
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
+
+  it('handles multiple EIP-6963 providers safely without arbitrary selection', async () => {
+    const listeners: Record<string, EventListener> = {};
+    const mockWindow = {
+      addEventListener: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+
+    const originalWindow = (globalThis as any).window;
+    try {
+      (globalThis as any).window = mockWindow;
+      const service = new EvmWalletService();
+
+      const provider1 = { request: vi.fn() };
+      const provider2 = { request: vi.fn() };
+
+      listeners['eip6963:announceProvider']({
+        detail: { info: { uuid: 'p1', name: 'Wallet A', icon: 'a.png', rdns: 'io.wallet.a' }, provider: provider1 }
+      } as unknown as Event);
+
+      listeners['eip6963:announceProvider']({
+        detail: { info: { uuid: 'p2', name: 'Wallet B', icon: 'b.png', rdns: 'io.wallet.b' }, provider: provider2 }
+      } as unknown as Event);
+
+      expect(service.getDiscoveredProviders()).toHaveLength(2);
+
+      // Connecting without selection should NOT arbitrarily pick one
+      const success = await service.connect();
+      expect(success).toBe(false);
+      expect(service.getState().error).toContain('Multiple EVM wallet providers detected');
+
+      // But selecting one explicitly works safely
+      provider1.request.mockImplementation(({ method }) => {
+        if (method === 'eth_requestAccounts') return Promise.resolve(['0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']);
+        if (method === 'eth_chainId') return Promise.resolve(PORTALDOT_CHAIN_ID_HEX);
+        if (method === 'eth_getBalance') return Promise.resolve('0x0');
+        return Promise.resolve(null);
+      });
+
+      service.selectProvider('io.wallet.a');
+      const selectSuccess = await service.connect();
+      expect(selectSuccess).toBe(true);
+      expect(service.getState().address).toBe('0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
+
+  it('handles multiple window.ethereum.providers safely without arbitrary selection', async () => {
+    const originalWindow = (globalThis as any).window;
+    try {
+      const mockP1 = { request: vi.fn() };
+      const mockP2 = { request: vi.fn() };
+      (globalThis as any).window = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        ethereum: {
+          providers: [mockP1, mockP2]
+        }
+      };
+
+      const service = new EvmWalletService();
+      const success = await service.connect();
+      expect(success).toBe(false);
+      expect(service.getState().error).toContain('Multiple EVM wallet providers detected in window.ethereum');
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
+
+  it('reports useful error message when reconnecting fails instead of silently swallowing', async () => {
+    const mockProvider = {
+      request: vi.fn().mockRejectedValue(new Error('Internal RPC disconnection during reconnect'))
+    };
+
+    const originalWindow = (globalThis as any).window;
+    try {
+      (globalThis as any).window = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        localStorage: {
+          getItem: vi.fn().mockReturnValue('true'), // was previously connected
+          setItem: vi.fn(),
+          removeItem: vi.fn(),
+        }
+      };
+
+      const service = new EvmWalletService(mockProvider);
+      const success = await service.checkExistingConnection();
+      expect(success).toBe(false);
+      expect(service.getState().error).toContain('Internal RPC disconnection during reconnect');
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
+
+  it('cleans up event listeners properly on cleanupListeners and destroy', () => {
+    const mockProvider = {
+      request: vi.fn(),
+      on: vi.fn(),
+      removeListener: vi.fn()
+    };
+
+    const listeners: Record<string, EventListener> = {};
+    const mockWindow = {
+      addEventListener: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    };
+
+    const originalWindow = (globalThis as any).window;
+    try {
+      (globalThis as any).window = mockWindow;
+      const service = new EvmWalletService(mockProvider);
+      service.initListeners();
+
+      expect(mockProvider.on).toHaveBeenCalledWith('accountsChanged', expect.any(Function));
+      expect(mockProvider.on).toHaveBeenCalledWith('chainChanged', expect.any(Function));
+
+      service.cleanupListeners();
+      expect(mockProvider.removeListener).toHaveBeenCalledWith('accountsChanged', expect.any(Function));
+      expect(mockProvider.removeListener).toHaveBeenCalledWith('chainChanged', expect.any(Function));
+
+      service.destroy();
+      expect(mockWindow.removeEventListener).toHaveBeenCalledWith('eip6963:announceProvider', expect.any(Function));
+    } finally {
+      (globalThis as any).window = originalWindow;
+    }
+  });
 });
 
 describe('SubstrateWalletService', () => {
